@@ -52,12 +52,11 @@ jobs:
           
           dirname="$binary_name-$version-${{ matrix.target }}"
           mkdir "$dirname"
+          
           if [ "${{ matrix.os }}" = "windows-latest" ]; then
-            ls target
-            ls "target/${{ matrix.target }}/release/"
-            mv "target/${{ matrix.target }}/release/$binary_name.exe" "$dirname"
+            mv "target/${{ matrix.target }}/release/reborn.exe" "$dirname"
           else
-            mv "target/${{ matrix.target }}/release/$binary_name" "$dirname"
+            mv "target/${{ matrix.target }}/release/reborn" "$dirname"
           fi
 
           if [ "${{ matrix.os }}" = "windows-latest" ]; then
