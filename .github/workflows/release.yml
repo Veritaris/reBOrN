@@ -13,12 +13,17 @@ permissions:
 jobs:
   build:
     name: Build app
-    runs-on: ${{ matrix.os }}
-
     strategy:
       matrix:
-        os: [ windows-latest, ]
-        target: [ x86_64-pc-windows-gnu, ]
+        platform:
+          - os: "windows-latest"
+            target: "x86_64-pc-windows-gnu"
+          - os: "ubuntu-latest"
+            target: "x86_64-unknown-linux-gnu"
+          - os: "macos-latest"
+            target: x86_64-apple-darwin
+
+    runs-on: ${{ matrix.platform.os }}
 
     steps:
       - name: Cloning
@@ -39,8 +44,8 @@ jobs:
 
       - name: Build binary
         uses: dtolnay/rust-toolchain@stable
-      - run: rustup target add ${{ matrix.target }}
-      - run: cargo build --release --target ${{ matrix.target }}
+      - run: rustup target add ${{ matrix.platform.target }}
+      - run: cargo build --release --target ${{ matrix.platform.target }}
 
       - name: Build archive
         shell: bash
@@ -53,16 +58,16 @@ jobs:
             version="${{ env.VERSION }}"
           fi
           
-          dirname="$binary_name-$version-${{ matrix.target }}"
+          dirname="$binary_name-$version-${{ matrix.platform.target }}"
           mkdir "$dirname"
           
-          if [ "${{ matrix.os }}" = "windows-latest" ]; then
-            mv "target/${{ matrix.target }}/release/reborn.exe" "$dirname"
+          if [ "${{ matrix.platform.os }}" = "windows-latest" ]; then
+            mv "target/${{ matrix.platform.target }}/release/reborn.exe" "$dirname"
           else
-            mv "target/${{ matrix.target }}/release/reborn" "$dirname"
+            mv "target/${{ matrix.platform.target }}/release/reborn" "$dirname"
           fi
 
-          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+          if [ "${{ matrix.platform.os }}" = "windows-latest" ]; then
             7z a -t7z "$dirname.7z" "$dirname"
             echo "ASSET=$dirname.7z" >> $GITHUB_ENV
           else
@@ -71,7 +76,9 @@ jobs:
           fi
 
       - name: Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
+          appendBody: true
+          make_latest: true
           files: |
             ${{ env.ASSET }}
