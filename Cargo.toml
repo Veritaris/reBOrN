@@ -20,7 +20,7 @@ rust-version = "1.89.0"
 [package.metadata.bundle]
 name = "reBOrN"
 identifier = "me.veritaris.jarremapper"
-icon = ["resources/icon.icns"]
+icon = ["resources/icon.ico"]
 
 [dependencies]
 # Workspace dependencies first
