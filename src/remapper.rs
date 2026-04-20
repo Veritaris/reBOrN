@@ -217,7 +217,7 @@ pub fn remap_jar(
     let files_amount = jar.len();
 
     for i in 0..files_amount {
-        let file: zip::read::ZipFile<'_> = jar.by_index(i)?;
+        let file: zip::read::ZipFile<'_, BufReader<std::fs::File>> = jar.by_index(i)?;
         let mangled_name = PathBuf::clone(&file.mangled_name());
         let filename = mangled_name.to_str().unwrap();
         let file_size = file.size();

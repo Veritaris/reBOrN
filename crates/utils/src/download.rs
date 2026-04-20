@@ -15,7 +15,7 @@ pub fn download_file<P: AsRef<Path>>(save_path: P, url: &String) -> Result<(), r
             let data_file = std::fs::File::create(save_path).unwrap();
 
             let mut file_writer = BufWriter::new(data_file);
-            file_writer.write(response.bytes()?.deref()).unwrap();
+            let _ = file_writer.write(response.bytes()?.deref()).unwrap();
             Ok(())
         }
     }
@@ -24,11 +24,7 @@ pub fn download_file<P: AsRef<Path>>(save_path: P, url: &String) -> Result<(), r
 pub fn download_tsrg<P: AsRef<Path>>(store_dir: P, mc_version: &str) {
     let file_url = format!("{SOURCE_DATA_DEFAULT_URL}/{mc_version}/joined.tsrg");
 
-    let save_path = store_dir
-        .as_ref()
-        .join("mappings")
-        .join(mc_version)
-        .join("joined.tsrg");
+    let save_path = store_dir.as_ref().join("mappings").join(mc_version).join("joined.tsrg");
     std::fs::create_dir_all(save_path.parent().unwrap()).unwrap();
     std::thread::spawn(move || {
         match download_file(save_path.as_path(), &file_url) {
@@ -42,12 +38,7 @@ pub fn download_tsrg<P: AsRef<Path>>(store_dir: P, mc_version: &str) {
     });
 }
 
-pub fn download_mappings<P: AsRef<Path>>(
-    store_dir: P,
-    mc_version: &str,
-    channel: &str,
-    mappings_version: &str,
-) {
+pub fn download_mappings<P: AsRef<Path>>(store_dir: P, mc_version: &str, channel: &str, mappings_version: &str) {
     let mappings_url_prepath = format!("{}/{}/{}", mc_version, channel, mappings_version);
     let mappings_url = format!("{SOURCE_DATA_DEFAULT_URL}/{mappings_url_prepath}");
     let mut v = Vec::<std::thread::JoinHandle<()>>::new();

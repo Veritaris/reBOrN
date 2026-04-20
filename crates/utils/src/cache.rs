@@ -26,11 +26,11 @@ impl RebornCache {
         let cache_file_path = get_cache_file_path();
 
         if !cache_file_path.exists() {
-            let defaule_cache = Self {
+            let default_cache = Self {
                 versions_json_hash: "".to_string(),
             };
-            Self::save_to_disk(&defaule_cache);
-            return defaule_cache;
+            Self::save_to_disk(&default_cache);
+            return default_cache;
         }
 
         let cache_content = std::fs::read_to_string(&cache_file_path).unwrap();
@@ -58,9 +58,9 @@ impl RebornCache {
             }
         }
         let mut file = std::fs::File::create(cache_file_path).expect("unable to open cache file");
-        let cache_string =
-            ron::ser::to_string_pretty(&self, ron::ser::PrettyConfig::default()).unwrap();
-        file.write(cache_string.as_bytes())
+        let cache_string = ron::ser::to_string_pretty(&self, ron::ser::PrettyConfig::default()).unwrap();
+        let _ = file
+            .write(cache_string.as_bytes())
             .expect("unable to save default cache");
     }
 }
@@ -93,8 +93,7 @@ pub fn ensure_versions_json(file_hash: Option<String>) -> Result<String, Error> 
     let cache_dir_path = cache_dir.cache_dir();
 
     if !cache_dir_path.exists() {
-        std::fs::create_dir_all(cache_dir_path)
-            .expect("unable to create cache directory, aborting");
+        std::fs::create_dir_all(cache_dir_path).expect("unable to create cache directory, aborting");
     }
 
     let versions_json_link = VERSIONS_URL.to_string();
@@ -109,10 +108,7 @@ pub fn ensure_versions_json(file_hash: Option<String>) -> Result<String, Error> 
                 cache_file_hash_matched
             }
             Err(err) => {
-                println!(
-                    "Unable to get hash of {:?}, reason: {}",
-                    &versions_json_path, err
-                );
+                println!("Unable to get hash of {:?}, reason: {}", &versions_json_path, err);
                 false
             }
         }
@@ -161,11 +157,8 @@ pub fn read_versions_json() -> LinkedHashMap<String, HashMap<String, Vec<String>
     let reader = BufReader::new(file);
     println!("{:?}", cache_dir);
     println!("{:?}", cache_dir_path);
-    let hm = serde_json::from_reader::<
-        BufReader<std::fs::File>,
-        HashMap<String, HashMap<String, Vec<String>>>,
-    >(reader)
-    .unwrap();
+    let hm = serde_json::from_reader::<BufReader<std::fs::File>, HashMap<String, HashMap<String, Vec<String>>>>(reader)
+        .unwrap();
 
     let mut sorted: Vec<(String, HashMap<String, Vec<String>>)> = hm
         .into_iter()
