@@ -5,3 +5,4 @@
 /jars/
 *.app
 *.dmg
+__pycache__

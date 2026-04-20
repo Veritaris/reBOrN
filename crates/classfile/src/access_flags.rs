@@ -18,25 +18,45 @@ pub struct AccessFlags {
 }
 
 impl AccessFlags {
+    /// 0x0001
     pub const PUBLIC: u16 = 1;
+    /// 0x0002
     pub const PRIVATE: u16 = 1 << 1;
+    /// 0x0004
     pub const PROTECTED: u16 = 1 << 2;
+    /// 0x0008
     pub const STATIC: u16 = 1 << 3;
+    /// 0x0010
     pub const FINAL: u16 = 1 << 4;
+    /// 0x0020
     pub const SUPER: u16 = 1 << 5;
+    /// 0x0020
     pub const SYNCHRONIZED: u16 = 1 << 5;
+    /// 0x0040
     pub const BRIDGE: u16 = 1 << 6;
+    /// 0x0040
     pub const VOLATILE: u16 = 1 << 6;
+    /// 0x0080
     pub const VARARGS: u16 = 1 << 7;
+    /// 0x0080
     pub const TRANSIENT: u16 = 1 << 7;
+    /// 0x0100
     pub const NATIVE: u16 = 1 << 8;
+    /// 0x0200
     pub const INTERFACE: u16 = 1 << 9;
+    /// 0x0400
     pub const ABSTRACT: u16 = 1 << 10;
+    /// 0x0800
     pub const STRICT: u16 = 1 << 11;
+    /// 0x1000
     pub const SYNTHETIC: u16 = 1 << 12;
+    /// 0x2000
     pub const ANNOTATION: u16 = 1 << 13;
+    /// 0x4000
     pub const ENUM: u16 = 1 << 14;
+    /// 0x8000
     pub const MANDATED: u16 = 1 << 15;
+    /// 0x8000
     pub const MODULE: u16 = 1 << 15;
 }
 
@@ -102,7 +122,7 @@ impl Into<String> for AccessFlags {
                 AccessFlags::FINAL => "final ",
 
                 AccessFlags::SUPER | AccessFlags::SYNCHRONIZED => match self.context {
-                    AccessFlagContext::Class => "super ",
+                    AccessFlagContext::Class => "",
                     AccessFlagContext::Module => "synchronized ",
                     AccessFlagContext::Method | AccessFlagContext::Field => "",
                 },

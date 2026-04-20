@@ -1,5 +1,4 @@
-use std::io::{BufReader, Error, ErrorKind, Read};
-
+use std::io::{BufReader, Error, ErrorKind, Read, Seek};
 use byteorder::{BigEndian, ReadBytesExt};
 use linked_hash_map::LinkedHashMap;
 use zip::read::ZipFile;
@@ -7,13 +6,26 @@ use zip::read::ZipFile;
 use crate::access_flags::{AccessFlagContext, AccessFlags};
 use crate::attributes::*;
 use crate::classfile::*;
+use crate::constant_pool_tag::{ConstantPoolJvmTag, ConstantPoolTags, CONTINUATION_TAG};
+use crate::field::Field;
+use crate::method::Method;
+use crate::type_alias;
 
 impl<'a, 'b> ClassFile
-    where 'b: 'a {
+where
+    'b: 'a,
+{
     pub fn tag_to_display(&self, tag: &ConstantPoolTags) -> String {
         match tag {
             ConstantPoolTags::Utf8 { bytes, length, .. } => {
-                format!("Utf8<length={}, bytes='{}'>", length, String::from_utf8(bytes.clone()).unwrap())
+                let bytes_stringified = match cesu8::from_java_cesu8(bytes.as_ref()) {
+                    Ok(res) => res.to_string(),
+                    Err(err) => {
+                        eprintln!("[TagDisplayError]: err={}, raw data: {:?}", err, bytes);
+                        String::from("<error>")
+                    }
+                };
+                format!("Utf8<length={}, bytes='{:?}', stringified='{}'>", length, bytes.clone(), bytes_stringified.clone())
             }
             ConstantPoolTags::Integer { _value, .. } => {
                 format!("Integer<value={}>", _value)
@@ -90,7 +102,11 @@ impl<'a, 'b> ClassFile
             _ => String::new()
         }
     }
-    pub fn read(len: u64, mut buff: BufReader<ZipFile>, mappings: Option<&LinkedHashMap<String, String>>) -> Result<ClassFile, Error> {
+
+    pub fn read<R>(len: u64, mut buff: BufReader<R>, mappings: Option<&LinkedHashMap<String, String>>) -> Result<ClassFile, Error>
+    where
+        R: Read,
+    {
         let magic = buff.read_u32::<BigEndian>()?;
         if magic != CLASS_HEADER {
             panic!("unexpected magic: {magic}");
@@ -127,7 +143,7 @@ impl<'a, 'b> ClassFile
         let super_class = buff.read_u16::<BigEndian>()?;
 
         let interfaces_count = buff.read_u16::<BigEndian>()?;
-        let mut interfaces: Vec<u2> = Vec::with_capacity(interfaces_count as usize);
+        let mut interfaces: Vec<type_alias::u2> = Vec::with_capacity(interfaces_count as usize);
         for _ in 0..interfaces_count {
             interfaces.push(buff.read_u16::<BigEndian>()?);
         }
@@ -172,20 +188,21 @@ impl<'a, 'b> ClassFile
 
     ///```javadoc
     /// field_info {
-    ///     u2             access_flags;
-    ///     u2             name_index;
-    ///     u2             descriptor_index;
-    ///     u2             attributes_count;
+    ///     type_alias::u2             access_flags;
+    ///     type_alias::u2             name_index;
+    ///     type_alias::u2             descriptor_index;
+    ///     type_alias::u2             attributes_count;
     ///     attribute_info attributes[attributes_count];
     /// }
     ///```
     /// Oracle docs: https://docs.oracle.com/javase/specs/jvms/se22/html/jvms-4.html#jvms-4.5
     ///
-    fn read_field(constant_pool: &Vec<ConstantPoolTags>, buff: &mut BufReader<ZipFile<'b>>) -> Result<Field, Error> {
-        let access_flags: u2 = buff.read_u16::<BigEndian>()?;
-        let name_index: u2 = buff.read_u16::<BigEndian>()?;
-        let descriptor_index: u2 = buff.read_u16::<BigEndian>()?;
-        let attributes_count: u2 = buff.read_u16::<BigEndian>()?;
+    fn read_field<R>(constant_pool: &Vec<ConstantPoolTags>, buff: &mut BufReader<R>) -> Result<Field, Error>
+    where R: Read {
+        let access_flags: type_alias::u2 = buff.read_u16::<BigEndian>()?;
+        let name_index: type_alias::u2 = buff.read_u16::<BigEndian>()?;
+        let descriptor_index: type_alias::u2 = buff.read_u16::<BigEndian>()?;
+        let attributes_count: type_alias::u2 = buff.read_u16::<BigEndian>()?;
         let attributes: Vec<Attribute> = Self::read_attributes_vec(attributes_count, &constant_pool, buff);
 
         Ok(Field {
@@ -199,16 +216,17 @@ impl<'a, 'b> ClassFile
 
     ///```javadoc
     /// method_info {
-    ///     u2             access_flags;
-    ///     u2             name_index;
-    ///     u2             descriptor_index;
-    ///     u2             attributes_count;
+    ///     type_alias::u2             access_flags;
+    ///     type_alias::u2             name_index;
+    ///     type_alias::u2             descriptor_index;
+    ///     type_alias::u2             attributes_count;
     ///     attribute_info attributes[attributes_count];
     /// }
     ///```
     /// Oracle docs: https://docs.oracle.com/javase/specs/jvms/se22/html/jvms-4.html#jvms-4.6
     ///
-    fn read_method(constant_pool: &Vec<ConstantPoolTags>, buff: &mut BufReader<ZipFile<'b>>) -> Result<Method, Error> {
+    fn read_method<R>(constant_pool: &Vec<ConstantPoolTags>, buff: &mut BufReader<R>) -> Result<Method, Error>
+    where R: Read {
         let access_flags = buff.read_u16::<BigEndian>()?;
         let name_index = buff.read_u16::<BigEndian>()?;
         let descriptor_index = buff.read_u16::<BigEndian>()?;
@@ -224,7 +242,10 @@ impl<'a, 'b> ClassFile
         })
     }
 
-    fn read_stack_frames_vec(count: u2, buff: &mut BufReader<ZipFile<'b>>) -> Vec<StackMapFrame> {
+    fn read_stack_frames_vec<R>(count: type_alias::u2, buff: &mut BufReader<R>) -> Vec<StackMapFrame>
+    where
+        R: Read,
+    {
         let mut stack_frames: Vec<StackMapFrame> = Vec::with_capacity(count as usize);
         for _ in 0..count {
             match Self::read_stack_frame(buff) {
@@ -235,7 +256,10 @@ impl<'a, 'b> ClassFile
         return stack_frames;
     }
 
-    fn read_stack_frame(buff: &mut BufReader<ZipFile<'b>>) -> Result<StackMapFrame, Error> {
+    fn read_stack_frame<R>(buff: &mut BufReader<R>) -> Result<StackMapFrame, Error>
+    where
+        R: Read,
+    {
         let frame_type = buff.read_u8()?;
 
         Ok(
@@ -314,21 +338,23 @@ impl<'a, 'b> ClassFile
         )
     }
 
-    fn read_attributes_vec(count: u2, constant_pool: &Vec<ConstantPoolTags>, buff: &mut BufReader<ZipFile<'b>>) -> Vec<Attribute> {
+    fn read_attributes_vec<R>(count: type_alias::u2, constant_pool: &Vec<ConstantPoolTags>, buff: &mut BufReader<R>) -> Vec<Attribute>
+    where R: Read {
         let mut attributes: Vec<Attribute> = Vec::with_capacity(count as usize);
         for _ in 0..count {
             match Self::read_attribute(constant_pool, buff) {
                 Ok(res) => attributes.push(res),
-                Err(err) => println!("unable to read attribute err={err}")
+                Err(err) => eprintln!("unable to read attribute err={err}")
             };
         };
-        return attributes;
+        attributes
     }
 
     ///
     /// Oracle docs: https://docs.oracle.com/javase/specs/jvms/se22/html/jvms-4.html#jvms-4.7
     ///
-    fn read_attribute(constant_pool: &Vec<ConstantPoolTags>, buff: &mut BufReader<ZipFile<'b>>) -> Result<Attribute, Error> {
+    fn read_attribute<R>(constant_pool: &Vec<ConstantPoolTags>, buff: &mut BufReader<R>) -> Result<Attribute, Error> 
+    where R: Read {
         let attribute_name_index = buff.read_u16::<BigEndian>()?;
         let attribute_length = buff.read_u32::<BigEndian>()?;
 
@@ -344,7 +370,7 @@ impl<'a, 'b> ClassFile
             )
         };
 
-        return match attribute_name {
+        match attribute_name {
             // critical to work on JVM
             "ConstantValue" => {
                 Ok(Attribute::ConstantValue {
@@ -357,7 +383,7 @@ impl<'a, 'b> ClassFile
                 let max_stack = buff.read_u16::<BigEndian>()?;
                 let max_locals = buff.read_u16::<BigEndian>()?;
                 let code_length = buff.read_u32::<BigEndian>()?;
-                let mut code: Vec<u1> = vec![0u8; code_length as usize];
+                let mut code: Vec<type_alias::u1> = vec![0u8; code_length as usize];
                 buff.read_exact(&mut *code)?;
                 let exception_table_length = buff.read_u16::<BigEndian>()?;
                 let mut exception_table: Vec<ExceptionTableEntry> = vec![];
@@ -405,7 +431,7 @@ impl<'a, 'b> ClassFile
                 for _ in 0..num_bootstrap_methods {
                     let bootstrap_method_ref = buff.read_u16::<BigEndian>()?;
                     let num_bootstrap_arguments = buff.read_u16::<BigEndian>()?;
-                    let mut bootstrap_arguments: Vec<u2> = Vec::with_capacity(num_bootstrap_arguments as usize);
+                    let mut bootstrap_arguments: Vec<type_alias::u2> = Vec::with_capacity(num_bootstrap_arguments as usize);
                     for _ in 0..num_bootstrap_arguments {
                         bootstrap_arguments.push(buff.read_u16::<BigEndian>()?);
                     }
@@ -432,7 +458,7 @@ impl<'a, 'b> ClassFile
             }
             "NestMembers" => {
                 let number_of_classes = buff.read_u16::<BigEndian>()?;
-                let mut classes: Vec<u2> = Vec::with_capacity(number_of_classes as usize);
+                let mut classes: Vec<type_alias::u2> = Vec::with_capacity(number_of_classes as usize);
                 for _ in 0..number_of_classes {
                     classes.push(buff.read_u16::<BigEndian>()?);
                 };
@@ -446,7 +472,7 @@ impl<'a, 'b> ClassFile
             }
             "PermittedSubclasses" => {
                 let number_of_classes = buff.read_u16::<BigEndian>()?;
-                let mut classes: Vec<u2> = Vec::with_capacity(number_of_classes as usize);
+                let mut classes: Vec<type_alias::u2> = Vec::with_capacity(number_of_classes as usize);
                 for _ in 0..number_of_classes {
                     classes.push(buff.read_u16::<BigEndian>()?);
                 };
@@ -462,7 +488,7 @@ impl<'a, 'b> ClassFile
             // optional, but critical for class libraries and instrumentation
             "Exceptions" => {
                 let number_of_exceptions = buff.read_u16::<BigEndian>()?;
-                let mut exception_index_table: Vec<u2> = Vec::with_capacity(number_of_exceptions as usize);
+                let mut exception_index_table: Vec<type_alias::u2> = Vec::with_capacity(number_of_exceptions as usize);
                 for _ in 0..number_of_exceptions {
                     exception_index_table.push(buff.read_u16::<BigEndian>()?);
                 };
@@ -605,7 +631,7 @@ impl<'a, 'b> ClassFile
 
             // non-critical, but useful for tools and instrumentation
             "SourceDebugExtension" => {
-                let mut debug_extension_bytes: Vec<u1> = vec![0u8; attribute_length as usize];
+                let mut debug_extension_bytes: Vec<type_alias::u1> = vec![0u8; attribute_length as usize];
                 buff.read_exact(&mut *debug_extension_bytes)?;
                 let debug_extension = match cesu8::from_java_cesu8(debug_extension_bytes.as_ref()) {
                     Ok(res) => res.to_string().into_bytes(),
@@ -681,7 +707,7 @@ impl<'a, 'b> ClassFile
                 let num_parameters = buff.read_u16::<BigEndian>()?;
                 let mut annotations: Vec<TypeAnnotation> = Vec::with_capacity(num_parameters as usize);
                 for _ in 0..num_parameters {
-                    let target_type: u1 = buff.read_u8()?;
+                    let target_type: type_alias::u1 = buff.read_u8()?;
                     let target_info = match target_type {
                         0x00 | 0x01 => TargetInfo::TypeParameterTarget { type_parameter_index: buff.read_u8()? },
                         0x10 => TargetInfo::SupertypeTarget { supertype_index: buff.read_u16::<BigEndian>()? },
@@ -819,7 +845,7 @@ impl<'a, 'b> ClassFile
                 }
 
                 let uses_count = buff.read_u16::<BigEndian>()?;
-                let mut uses_index: Vec<u2> = Vec::with_capacity(uses_count as usize);
+                let mut uses_index: Vec<type_alias::u2> = Vec::with_capacity(uses_count as usize);
                 for _ in 0..uses_count {
                     uses_index.push(buff.read_u16::<BigEndian>()?);
                 }
@@ -855,7 +881,7 @@ impl<'a, 'b> ClassFile
             }
             "ModulePackages" => {
                 let package_count = buff.read_u16::<BigEndian>()?;
-                let mut package_index: Vec<u2> = Vec::with_capacity(package_count as usize);
+                let mut package_index: Vec<type_alias::u2> = Vec::with_capacity(package_count as usize);
                 for _ in 0..package_count {
                     package_index.push(buff.read_u16::<BigEndian>()?);
                 };
@@ -873,14 +899,22 @@ impl<'a, 'b> ClassFile
                     main_class_index: buff.read_u16::<BigEndian>()?,
                 })
             }
-            &_ => Err(Error::new(
-                ErrorKind::InvalidInput,
-                format!("unknown / not implemented attribute '{}' at index {}", attribute_name, attribute_name_index))
-            )
-        };
+            &_ => {
+                let mut info: Vec<type_alias::u1> = vec![attribute_length as u8];
+                if attribute_length > 0 {
+                    buff.read_exact(info.as_mut())?;
+                }
+                Ok(Attribute::ExternalAttribute {
+                    attribute_name_index,
+                    attribute_length,
+                    info,
+                })
+            }
+        }
     }
 
-    fn read_annotation_element_values_vec(num_values: u2, buff: &mut BufReader<ZipFile<'b>>) -> Result<Vec<ElementValue>, Error> {
+    fn read_annotation_element_values_vec<R>(num_values: type_alias::u2, buff: &mut BufReader<R>) -> Result<Vec<ElementValue>, Error>
+    where R: Read {
         let mut element_values: Vec<ElementValue> = Vec::with_capacity(num_values as usize);
         for _ in 0..num_values {
             match Self::read_annotation_element_value(buff) {
@@ -892,7 +926,8 @@ impl<'a, 'b> ClassFile
         Ok(element_values)
     }
 
-    fn read_annotations_element_value_pairs_vec(num_element_value_pairs: u2, buff: &mut BufReader<ZipFile<'b>>) -> Result<Vec<ElementValuePair>, Error> {
+    fn read_annotations_element_value_pairs_vec<R>(num_element_value_pairs: type_alias::u2, buff: &mut BufReader<R>) -> Result<Vec<ElementValuePair>, Error>
+    where R: Read {
         let mut element_value_pairs: Vec<ElementValuePair> = Vec::with_capacity(num_element_value_pairs as usize);
 
         for _ in 0..num_element_value_pairs {
@@ -907,7 +942,8 @@ impl<'a, 'b> ClassFile
         Ok(element_value_pairs)
     }
 
-    fn read_annotation_element_value(buff: &mut BufReader<ZipFile<'b>>) -> Result<ElementValue, Error> {
+    fn read_annotation_element_value<R>(buff: &mut BufReader<R>) -> Result<ElementValue, Error>
+    where R: Read {
         let tag = buff.read_u8()?;
 
         Ok(ElementValue {
@@ -935,7 +971,8 @@ impl<'a, 'b> ClassFile
         })
     }
 
-    fn read_annotation(buff: &mut BufReader<ZipFile<'b>>) -> Result<Annotation, Error> {
+    fn read_annotation<R>(buff: &mut BufReader<R>) -> Result<Annotation, Error>
+    where R: Read {
         let type_index = buff.read_u16::<BigEndian>()?;
         let num_element_value_pairs = buff.read_u16::<BigEndian>()?;
         let element_value_pairs: Vec<ElementValuePair> = Self::read_annotations_element_value_pairs_vec(num_element_value_pairs, buff)?;
@@ -947,7 +984,8 @@ impl<'a, 'b> ClassFile
         })
     }
 
-    fn read_annotations_vec(num_annotations: u2, buff: &mut BufReader<ZipFile<'b>>) -> Result<Vec<Annotation>, Error> {
+    fn read_annotations_vec<R>(num_annotations: type_alias::u2, buff: &mut BufReader<R>) -> Result<Vec<Annotation>, Error>
+    where R: Read {
         let mut annotations: Vec<Annotation> = Vec::with_capacity(num_annotations as usize);
 
         for _ in 0..num_annotations {
@@ -960,7 +998,10 @@ impl<'a, 'b> ClassFile
         Ok(annotations)
     }
 
-    fn read_tag(buff: &mut BufReader<ZipFile<'b>>, mappings: Option<&LinkedHashMap<String, String>>) -> Result<ConstantPoolTags, Error> {
+    fn read_tag<R>(buff: &mut BufReader<R>, mappings: Option<&LinkedHashMap<String, String>>) -> Result<ConstantPoolTags, Error>
+    where
+        R: Read,
+    {
         let tag_byte = buff.read_u8()?;
         let tag = ConstantPoolJvmTag::from(tag_byte);
         match tag {

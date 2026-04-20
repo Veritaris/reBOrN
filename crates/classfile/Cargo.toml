@@ -6,8 +6,8 @@ authors.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-zip = { version = "2.1.6", default-features = false, features = ["deflate", "deflate-zopfli"] }
+zip = { version = "2.4.1", default-features = false, features = ["deflate", "deflate-zopfli"] }
 byteorder = { version = "1.5.0", default-features = false, features = ["default"] }
-indoc = { version = "2.0.5", default-features = false }
+indoc = { version = "2.0.6", default-features = false }
 cesu8 = { version = "1.1.0", default-features = false }
 linked-hash-map = { version = "0.5.6", default-features = false }

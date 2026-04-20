@@ -4,3 +4,7 @@ pub mod classfile;
 pub mod opcodes;
 pub mod access_flags;
 pub mod attributes;
+pub mod type_alias;
+mod constant_pool_tag;
+mod field;
+mod method;

@@ -1,24 +1,24 @@
-use std::io::{BufReader, Error, ErrorKind, Write};
+use std::io::{BufReader, Error, ErrorKind, Read, Write};
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use zip::read::ZipFile;
 
 use crate::access_flags::AccessFlags;
-use crate::classfile::{u1, u2, u4};
+use crate::type_alias;
 
 ///```javadoc
-/// {   u2 start_pc;
-///     u2 end_pc;
-///     u2 handler_pc;
-///     u2 catch_type;
+/// {   type_alias::u2 start_pc;
+///     type_alias::u2 end_pc;
+///     type_alias::u2 handler_pc;
+///     type_alias::u2 catch_type;
 /// } exception_table[exception_table_length];
 ///```
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ExceptionTableEntry {
-    pub start_pc: u2,
-    pub end_pc: u2,
-    pub handler_pc: u2,
-    pub catch_type: u2,
+    pub start_pc: type_alias::u2,
+    pub end_pc: type_alias::u2,
+    pub handler_pc: type_alias::u2,
+    pub catch_type: type_alias::u2,
 }
 
 impl ExceptionTableEntry {
@@ -33,17 +33,17 @@ impl ExceptionTableEntry {
 
 
 ///```javadoc
-/// {   u2 start_pc;
-///     u2 length;
-///     u2 name_index;
-///     u2 descriptor_index;
-///     u2 index;
+/// {   type_alias::u2 start_pc;
+///     type_alias::u2 length;
+///     type_alias::u2 name_index;
+///     type_alias::u2 descriptor_index;
+///     type_alias::u2 index;
 /// } local_variable_table[local_variable_table_length];
 ///```
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct LineNumberEntry {
-    pub start_pc: u2,
-    pub line_number: u2,
+    pub start_pc: type_alias::u2,
+    pub line_number: type_alias::u2,
 }
 
 impl LineNumberEntry {
@@ -55,20 +55,20 @@ impl LineNumberEntry {
 }
 
 ///```javadoc
-/// {   u2 start_pc;
-///     u2 length;
-///     u2 name_index;
-///     u2 descriptor_index;
-///     u2 index;
+/// {   type_alias::u2 start_pc;
+///     type_alias::u2 length;
+///     type_alias::u2 name_index;
+///     type_alias::u2 descriptor_index;
+///     type_alias::u2 index;
 /// } local_variable_table[local_variable_table_length];
 ///```
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct LocalVariableTableEntry {
-    pub start_pc: u2,
-    pub length: u2,
-    pub name_index: u2,
-    pub descriptor_index: u2,
-    pub index: u2,
+    pub start_pc: type_alias::u2,
+    pub length: type_alias::u2,
+    pub name_index: type_alias::u2,
+    pub descriptor_index: type_alias::u2,
+    pub index: type_alias::u2,
 }
 
 impl LocalVariableTableEntry {
@@ -83,20 +83,20 @@ impl LocalVariableTableEntry {
 }
 
 ///```javadoc
-/// {   u2 start_pc;
-///     u2 length;
-///     u2 name_index;
-///     u2 signature_index;
-///     u2 index;
+/// {   type_alias::u2 start_pc;
+///     type_alias::u2 length;
+///     type_alias::u2 name_index;
+///     type_alias::u2 signature_index;
+///     type_alias::u2 index;
 /// } local_variable_type_table[local_variable_type_table_length];
 /// ```
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct LocalVariableTypeTableEntry {
-    pub start_pc: u2,
-    pub length: u2,
-    pub name_index: u2,
-    pub signature_index: u2,
-    pub index: u2,
+    pub start_pc: type_alias::u2,
+    pub length: type_alias::u2,
+    pub name_index: type_alias::u2,
+    pub signature_index: type_alias::u2,
+    pub index: type_alias::u2,
 }
 
 impl LocalVariableTypeTableEntry {
@@ -111,40 +111,40 @@ impl LocalVariableTypeTableEntry {
 }
 
 ///```javadoc
-/// {   u2 bootstrap_method_ref;
-///     u2 num_bootstrap_arguments;
-///     u2 bootstrap_arguments[num_bootstrap_arguments];
+/// {   type_alias::u2 bootstrap_method_ref;
+///     type_alias::u2 num_bootstrap_arguments;
+///     type_alias::u2 bootstrap_arguments[num_bootstrap_arguments];
 /// } bootstrap_methods[num_bootstrap_methods];
 /// ```
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct BootstrapMethodEntry {
-    pub bootstrap_method_ref: u2,
-    pub num_bootstrap_arguments: u2,
-    pub bootstrap_arguments: Vec<u2>,
+    pub bootstrap_method_ref: type_alias::u2,
+    pub num_bootstrap_arguments: type_alias::u2,
+    pub bootstrap_arguments: Vec<type_alias::u2>,
 }
 
 impl BootstrapMethodEntry {
     pub unsafe fn write(self, buff: &mut Vec<u8>) -> Result<(), Error> {
         buff.write_u16::<BigEndian>(self.bootstrap_method_ref)?;
         buff.write_u16::<BigEndian>(self.num_bootstrap_arguments)?;
-        buff.write(self.bootstrap_arguments.iter().map(|e| { e.to_be() }).collect::<Vec<u2>>().align_to::<u8>().1)?;
+        buff.write(self.bootstrap_arguments.iter().map(|e| { e.to_be() }).collect::<Vec<type_alias::u2>>().align_to::<u8>().1)?;
         Ok(())
     }
 }
 
 ///```javadoc
-/// {   u2 inner_class_info_index;
-///     u2 outer_class_info_index;
-///     u2 inner_name_index;
-///     u2 inner_class_access_flags;
+/// {   type_alias::u2 inner_class_info_index;
+///     type_alias::u2 outer_class_info_index;
+///     type_alias::u2 inner_name_index;
+///     type_alias::u2 inner_class_access_flags;
 /// } classes[number_of_classes];
 /// ```
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct InnerClassEntry {
-    pub inner_class_info_index: u2,
-    pub outer_class_info_index: u2,
-    pub inner_name_index: u2,
-    pub inner_class_access_flags: u2,
+    pub inner_class_info_index: type_alias::u2,
+    pub outer_class_info_index: type_alias::u2,
+    pub inner_name_index: type_alias::u2,
+    pub inner_class_access_flags: type_alias::u2,
 }
 
 impl InnerClassEntry {
@@ -159,17 +159,17 @@ impl InnerClassEntry {
 
 ///```javadoc
 /// record_component_info {
-///     u2             name_index;
-///     u2             descriptor_index;
-///     u2             attributes_count;
+///     type_alias::u2             name_index;
+///     type_alias::u2             descriptor_index;
+///     type_alias::u2             attributes_count;
 ///     attribute_info attributes[attributes_count];
 /// }
 /// ```
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct RecordComponentInfo {
-    pub name_index: u2,
-    pub descriptor_index: u2,
-    pub attributes_count: u2,
+    pub name_index: type_alias::u2,
+    pub descriptor_index: type_alias::u2,
+    pub attributes_count: type_alias::u2,
     pub attributes: Vec<Attribute>,
 }
 
@@ -187,17 +187,17 @@ impl RecordComponentInfo {
 
 ///```javadoc
 /// annotation {
-///     u2 type_index;
-///     u2 num_element_value_pairs;
-///     {   u2            element_name_index;
+///     type_alias::u2 type_index;
+///     type_alias::u2 num_element_value_pairs;
+///     {   type_alias::u2            element_name_index;
 ///         element_value value;
 ///     } element_value_pairs[num_element_value_pairs];
 /// }
 ///```
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Annotation {
-    pub type_index: u2,
-    pub num_element_value_pairs: u2,
+    pub type_index: type_alias::u2,
+    pub num_element_value_pairs: type_alias::u2,
     pub element_value_pairs: Vec<ElementValuePair>,
 }
 
@@ -213,13 +213,13 @@ impl Annotation {
 }
 
 ///```javadoc
-/// {   u2            element_name_index;
+/// {   type_alias::u2            element_name_index;
 ///     element_value value;
 /// }
 /// ```
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ElementValuePair {
-    pub element_name_index: u2,
+    pub element_name_index: type_alias::u2,
     pub value: ElementValue,
 }
 
@@ -233,27 +233,27 @@ impl ElementValuePair {
 
 ///```javadoc
 /// element_value {
-///     u1 tag;
+///     type_alias::u1 tag;
 ///     union {
-///         u2 const_value_index;
+///         type_alias::u2 const_value_index;
 ///
-///         {   u2 type_name_index;
-///             u2 const_name_index;
+///         {   type_alias::u2 type_name_index;
+///             type_alias::u2 const_name_index;
 ///         } enum_const_value;
 ///
-///         u2 class_info_index;
+///         type_alias::u2 class_info_index;
 ///
 ///         annotation annotation_value;
 ///
-///         {   u2            num_values;
+///         {   type_alias::u2            num_values;
 ///             element_value values[num_values];
 ///         } array_value;
 ///     } value;
 /// }
 ///```
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ElementValue {
-    pub tag: u1,
+    pub tag: type_alias::u1,
     pub value: Value,
 }
 
@@ -268,17 +268,17 @@ impl ElementValue {
 
 ///```javadoc
 /// union {
-///     u2 const_value_index;
+///     type_alias::u2 const_value_index;
 ///
-///     {   u2 type_name_index;
-///         u2 const_name_index;
+///     {   type_alias::u2 type_name_index;
+///         type_alias::u2 const_name_index;
 ///     } enum_const_value;
 ///
-///     u2 class_info_index;
+///     type_alias::u2 class_info_index;
 ///
 ///     annotation annotation_value;
 ///
-///     {   u2            num_values;
+///     {   type_alias::u2            num_values;
 ///         element_value values[num_values];
 ///     } array_value;
 /// } value;
@@ -298,13 +298,13 @@ impl ElementValue {
 /// | c	        | Class	                | class_info_index      | Not applicable    |
 /// | @	        | Annotation interface	| annotation_value      | Not applicable    |
 /// | [	        | Array type  	        | array_value           | Not applicable    |
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Value {
-    ConstValueIndex { const_value_index: u2 },
-    EnumConstValue { type_name_index: u2, const_name_index: u2 },
-    ClassInfoIndex { class_info_index: u2 },
+    ConstValueIndex { const_value_index: type_alias::u2 },
+    EnumConstValue { type_name_index: type_alias::u2, const_name_index: type_alias::u2 },
+    ClassInfoIndex { class_info_index: type_alias::u2 },
     AnnotationValue { annotation_value: Annotation },
-    ArrayValue { num_values: u2, values: Vec<ElementValue> },
+    ArrayValue { num_values: type_alias::u2, values: Vec<ElementValue> },
 }
 
 impl Value {
@@ -329,16 +329,17 @@ impl Value {
 }
 
 ///```javadoc
-/// {   u2 start_pc;
-///     u2 length;
-///     u2 name_index;
-///     u2 descriptor_index;
-///     u2 index;
+/// {   type_alias::u2 start_pc;
+///     type_alias::u2 length;
+///     type_alias::u2 name_index;
+///     type_alias::u2 descriptor_index;
+///     type_alias::u2 index;
 /// } local_variable_table[local_variable_table_length];
 ///```
 #[derive(Copy, Clone)]
+#[derive(Debug)]
 pub struct Parameter {
-    pub name_index: u2,
+    pub name_index: type_alias::u2,
     pub access_flags: AccessFlags,
 }
 
@@ -351,14 +352,14 @@ impl Parameter {
 }
 
 ///```javadoc
-/// {   u2 start_pc;
-///     u2 length;
-///     u2 name_index;
-///     u2 descriptor_index;
-///     u2 index;
+/// {   type_alias::u2 start_pc;
+///     type_alias::u2 length;
+///     type_alias::u2 name_index;
+///     type_alias::u2 descriptor_index;
+///     type_alias::u2 index;
 /// } local_variable_table[local_variable_table_length];
 ///```
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub enum VerificationTypeInfoItem {
     ItemTop = 0,
     ItemInteger = 1,
@@ -373,16 +374,16 @@ pub enum VerificationTypeInfoItem {
 
 
 ///```javadoc
-/// {   u2 start_pc;
-///     u2 length;
-///     u2 name_index;
-///     u2 descriptor_index;
-///     u2 index;
+/// {   type_alias::u2 start_pc;
+///     type_alias::u2 length;
+///     type_alias::u2 name_index;
+///     type_alias::u2 descriptor_index;
+///     type_alias::u2 index;
 /// } local_variable_table[local_variable_table_length];
 ///```
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ParameterAnnotation {
-    pub num_annotations: u2,
+    pub num_annotations: type_alias::u2,
     pub annotations: Vec<Annotation>,
 }
 
@@ -397,20 +398,20 @@ impl ParameterAnnotation {
 }
 
 ///```javadoc
-/// {   u2 start_pc;
-///     u2 length;
-///     u2 name_index;
-///     u2 descriptor_index;
-///     u2 index;
+/// {   type_alias::u2 start_pc;
+///     type_alias::u2 length;
+///     type_alias::u2 name_index;
+///     type_alias::u2 descriptor_index;
+///     type_alias::u2 index;
 /// } local_variable_table[local_variable_table_length];
 ///```
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct TypeAnnotation {
-    pub target_type: u1,
+    pub target_type: type_alias::u1,
     pub target_info: TargetInfo,
     pub target_path: TypePath,
-    pub type_index: u2,
-    pub num_element_value_pairs: u2,
+    pub type_index: type_alias::u2,
+    pub num_element_value_pairs: type_alias::u2,
     pub element_value_pairs: Vec<ElementValuePair>,
 }
 
@@ -429,17 +430,17 @@ impl TypeAnnotation {
 }
 
 ///```javadoc
-/// {   u2 start_pc;
-///     u2 length;
-///     u2 name_index;
-///     u2 descriptor_index;
-///     u2 index;
+/// {   type_alias::u2 start_pc;
+///     type_alias::u2 length;
+///     type_alias::u2 name_index;
+///     type_alias::u2 descriptor_index;
+///     type_alias::u2 index;
 /// } local_variable_table[local_variable_table_length];
 ///```
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct PathEntry {
-    pub type_path_kind: u1,
-    pub type_argument_index: u1,
+    pub type_path_kind: type_alias::u1,
+    pub type_argument_index: type_alias::u1,
 }
 
 impl PathEntry {
@@ -451,16 +452,16 @@ impl PathEntry {
 }
 
 ///```javadoc
-/// {   u2 start_pc;
-///     u2 length;
-///     u2 name_index;
-///     u2 descriptor_index;
-///     u2 index;
+/// {   type_alias::u2 start_pc;
+///     type_alias::u2 length;
+///     type_alias::u2 name_index;
+///     type_alias::u2 descriptor_index;
+///     type_alias::u2 index;
 /// } local_variable_table[local_variable_table_length];
 ///```
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct TypePath {
-    pub path_length: u1,
+    pub path_length: type_alias::u1,
     pub path: Vec<PathEntry>,
 }
 
@@ -475,25 +476,25 @@ impl TypePath {
 }
 
 ///```javadoc
-/// {   u2 start_pc;
-///     u2 length;
-///     u2 name_index;
-///     u2 descriptor_index;
-///     u2 index;
+/// {   type_alias::u2 start_pc;
+///     type_alias::u2 length;
+///     type_alias::u2 name_index;
+///     type_alias::u2 descriptor_index;
+///     type_alias::u2 index;
 /// } local_variable_table[local_variable_table_length];
 ///```
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum TargetInfo {
-    TypeParameterTarget { type_parameter_index: u1 },
-    SupertypeTarget { supertype_index: u2 },
-    TypeParameterBoundTarget { type_parameter_index: u1, bound_index: u1 },
+    TypeParameterTarget { type_parameter_index: type_alias::u1 },
+    SupertypeTarget { supertype_index: type_alias::u2 },
+    TypeParameterBoundTarget { type_parameter_index: type_alias::u1, bound_index: type_alias::u1 },
     EmptyTarget {},
-    FormalParameterTarget { formal_parameter_index: u1 },
-    ThrowsTarget { throws_type_index: u2 },
-    LocalvarTarget { table_length: u2, table: Vec<LocalvarTargetTableEntry> },
-    CatchTarget { exception_table_index: u2 },
-    OffsetTarget { offset: u2 },
-    TypeArgumentTarget { offset: u2, type_argument_index: u1 },
+    FormalParameterTarget { formal_parameter_index: type_alias::u1 },
+    ThrowsTarget { throws_type_index: type_alias::u2 },
+    LocalvarTarget { table_length: type_alias::u2, table: Vec<LocalvarTargetTableEntry> },
+    CatchTarget { exception_table_index: type_alias::u2 },
+    OffsetTarget { offset: type_alias::u2 },
+    TypeArgumentTarget { offset: type_alias::u2, type_argument_index: type_alias::u1 },
 }
 
 impl TargetInfo {
@@ -528,18 +529,18 @@ impl TargetInfo {
 }
 
 ///```javadoc
-/// {   u2 start_pc;
-///     u2 length;
-///     u2 name_index;
-///     u2 descriptor_index;
-///     u2 index;
+/// {   type_alias::u2 start_pc;
+///     type_alias::u2 length;
+///     type_alias::u2 name_index;
+///     type_alias::u2 descriptor_index;
+///     type_alias::u2 index;
 /// } local_variable_table[local_variable_table_length];
 ///```
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct LocalvarTargetTableEntry {
-    pub start_pc: u2,
-    pub length: u2,
-    pub index: u2,
+    pub start_pc: type_alias::u2,
+    pub length: type_alias::u2,
+    pub index: type_alias::u2,
 }
 
 impl LocalvarTargetTableEntry {
@@ -553,57 +554,57 @@ impl LocalvarTargetTableEntry {
 
 ///```javadoc
 /// Module_attribute {
-///     u2 attribute_name_index;
-///     u4 attribute_length;
+///     type_alias::u2 attribute_name_index;
+///     type_alias::u4 attribute_length;
 ///
-///     u2 module_name_index;
-///     u2 module_flags;
-///     u2 module_version_index;
+///     type_alias::u2 module_name_index;
+///     type_alias::u2 module_flags;
+///     type_alias::u2 module_version_index;
 ///
-///     u2 requires_count;
-///     {   u2 requires_index;
-///         u2 requires_flags;
-///         u2 requires_version_index;
+///     type_alias::u2 requires_count;
+///     {   type_alias::u2 requires_index;
+///         type_alias::u2 requires_flags;
+///         type_alias::u2 requires_version_index;
 ///     } requires[requires_count];
 ///
-///     u2 exports_count;
-///     {   u2 exports_index;
-///         u2 exports_flags;
-///         u2 exports_to_count;
-///         u2 exports_to_index[exports_to_count];
+///     type_alias::u2 exports_count;
+///     {   type_alias::u2 exports_index;
+///         type_alias::u2 exports_flags;
+///         type_alias::u2 exports_to_count;
+///         type_alias::u2 exports_to_index[exports_to_count];
 ///     } exports[exports_count];
 ///
-///     u2 opens_count;
-///     {   u2 opens_index;
-///         u2 opens_flags;
-///         u2 opens_to_count;
-///         u2 opens_to_index[opens_to_count];
+///     type_alias::u2 opens_count;
+///     {   type_alias::u2 opens_index;
+///         type_alias::u2 opens_flags;
+///         type_alias::u2 opens_to_count;
+///         type_alias::u2 opens_to_index[opens_to_count];
 ///     } opens[opens_count];
 ///
-///     u2 uses_count;
-///     u2 uses_index[uses_count];
+///     type_alias::u2 uses_count;
+///     type_alias::u2 uses_index[uses_count];
 ///
-///     u2 provides_count;
-///     {   u2 provides_index;
-///         u2 provides_with_count;
-///         u2 provides_with_index[provides_with_count];
+///     type_alias::u2 provides_count;
+///     {   type_alias::u2 provides_index;
+///         type_alias::u2 provides_with_count;
+///         type_alias::u2 provides_with_index[provides_with_count];
 ///     } provides[provides_count];
 /// }
 ///```
 
 ///```javadoc
-/// {   u2 start_pc;
-///     u2 length;
-///     u2 name_index;
-///     u2 descriptor_index;
-///     u2 index;
+/// {   type_alias::u2 start_pc;
+///     type_alias::u2 length;
+///     type_alias::u2 name_index;
+///     type_alias::u2 descriptor_index;
+///     type_alias::u2 index;
 /// } local_variable_table[local_variable_table_length];
 ///```
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct RequiresEntry {
-    pub requires_index: u2,
-    pub requires_flags: u2,
-    pub requires_version_index: u2,
+    pub requires_index: type_alias::u2,
+    pub requires_flags: type_alias::u2,
+    pub requires_version_index: type_alias::u2,
 }
 
 impl RequiresEntry {
@@ -616,18 +617,18 @@ impl RequiresEntry {
 }
 
 ///```javadoc
-/// {   u2 start_pc;
-///     u2 length;
-///     u2 name_index;
-///     u2 descriptor_index;
-///     u2 index;
+/// {   type_alias::u2 start_pc;
+///     type_alias::u2 length;
+///     type_alias::u2 name_index;
+///     type_alias::u2 descriptor_index;
+///     type_alias::u2 index;
 /// } local_variable_table[local_variable_table_length];
 ///```
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ExportsEntry {
-    pub exports_index: u2,
-    pub exports_flags: u2,
-    pub exports_to_count: u2,
+    pub exports_index: type_alias::u2,
+    pub exports_flags: type_alias::u2,
+    pub exports_to_count: type_alias::u2,
 }
 
 impl ExportsEntry {
@@ -640,18 +641,18 @@ impl ExportsEntry {
 }
 
 ///```javadoc
-/// {   u2 start_pc;
-///     u2 length;
-///     u2 name_index;
-///     u2 descriptor_index;
-///     u2 index;
+/// {   type_alias::u2 start_pc;
+///     type_alias::u2 length;
+///     type_alias::u2 name_index;
+///     type_alias::u2 descriptor_index;
+///     type_alias::u2 index;
 /// } local_variable_table[local_variable_table_length];
 ///```
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct OpensEntry {
-    pub opens_index: u2,
-    pub opens_flags: u2,
-    pub opens_to_count: u2,
+    pub opens_index: type_alias::u2,
+    pub opens_flags: type_alias::u2,
+    pub opens_to_count: type_alias::u2,
 }
 
 impl OpensEntry {
@@ -664,17 +665,17 @@ impl OpensEntry {
 }
 
 ///```javadoc
-/// {   u2 start_pc;
-///     u2 length;
-///     u2 name_index;
-///     u2 descriptor_index;
-///     u2 index;
+/// {   type_alias::u2 start_pc;
+///     type_alias::u2 length;
+///     type_alias::u2 name_index;
+///     type_alias::u2 descriptor_index;
+///     type_alias::u2 index;
 /// } local_variable_table[local_variable_table_length];
 ///```
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ProvidesEntry {
-    pub provides_index: u2,
-    pub provides_with_count: u2,
+    pub provides_index: type_alias::u2,
+    pub provides_with_count: type_alias::u2,
 }
 
 impl ProvidesEntry {
@@ -685,7 +686,7 @@ impl ProvidesEntry {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum VerificationTypeInfo {
     TopVariableInfo {
         tag: VerificationTypeInfoItem /* 0 */,
@@ -710,11 +711,11 @@ pub enum VerificationTypeInfo {
     },
     ObjectVariableInfo {
         tag: VerificationTypeInfoItem /* 7 */,
-        cpool_index: u2,
+        cpool_index: type_alias::u2,
     },
     UninitializedVariableInfo {
         tag: VerificationTypeInfoItem /* 8 */,
-        offset: u2,
+        offset: type_alias::u2,
     },
 }
 
@@ -782,10 +783,11 @@ impl TryInto<u8> for VerificationTypeInfoItem {
 }
 
 
-impl<'a> TryFrom<&mut BufReader<ZipFile<'a>>> for VerificationTypeInfo {
+impl<R> TryFrom<&mut BufReader<R>> for VerificationTypeInfo 
+where R: Read {
     type Error = Error;
 
-    fn try_from(buff: &mut BufReader<ZipFile<'a>>) -> Result<Self, Self::Error> {
+    fn try_from(buff: &mut BufReader<R>) -> Result<Self, Self::Error> {
         let tag = VerificationTypeInfoItem::try_from(buff.read_u8()?)?;
         Ok(match tag {
             VerificationTypeInfoItem::ItemTop => VerificationTypeInfo::TopVariableInfo { tag },
@@ -808,47 +810,47 @@ impl<'a> TryFrom<&mut BufReader<ZipFile<'a>>> for VerificationTypeInfo {
 }
 
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum StackMapFrame {
     /// 0-63
     SameFrame {
-        frame_type: u1
+        frame_type: type_alias::u1
     },
     /// 64-127
     SameLocals1StackItemFrame {
-        frame_type: u1,
+        frame_type: type_alias::u1,
         stack: Vec<VerificationTypeInfo>,
     },
     /// 247
     SameLocals1StackItemFrameExtended {
-        frame_type: u1,
-        offset_delta: u2,
+        frame_type: type_alias::u1,
+        offset_delta: type_alias::u2,
         stack: Vec<VerificationTypeInfo>,
     },
     /// 248-250, k=251-frame_type
     ChopFrame {
-        frame_type: u1,
-        offset_delta: u2,
+        frame_type: type_alias::u1,
+        offset_delta: type_alias::u2,
     },
     /// 251
     SameFrameExtended {
-        frame_type: u1,
-        offset_delta: u2,
+        frame_type: type_alias::u1,
+        offset_delta: type_alias::u2,
     },
     /// 252-254
     AppendFrame {
-        frame_type: u1,
-        offset_delta: u2,
+        frame_type: type_alias::u1,
+        offset_delta: type_alias::u2,
         /// len is frame_type-251
         locals: Vec<VerificationTypeInfo>,
     },
     /// 255
     FullFrame {
-        frame_type: u1,
-        offset_delta: u2,
-        number_of_locals: u2,
+        frame_type: type_alias::u1,
+        offset_delta: type_alias::u2,
+        number_of_locals: type_alias::u2,
         locals: Vec<VerificationTypeInfo>,
-        number_of_stack_items: u2,
+        number_of_stack_items: type_alias::u2,
         stack: Vec<VerificationTypeInfo>,
     },
 }
@@ -904,223 +906,229 @@ impl StackMapFrame {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Attribute {
     /// Oracle docs: https://docs.oracle.com/javase/specs/jvms/se22/html/jvms-4.html#jvms-4.7.2
     ConstantValue {
-        attribute_name_index: u2,
-        attribute_length: u4,
-        constantvalue_index: u2,
+        attribute_name_index: type_alias::u2,
+        attribute_length: type_alias::u4,
+        constantvalue_index: type_alias::u2,
     },
     /// Oracle docs: https://docs.oracle.com/javase/specs/jvms/se22/html/jvms-4.html#jvms-4.7.3
     Code {
-        attribute_name_index: u2,
-        attribute_length: u4,
-        max_stack: u2,
-        max_locals: u2,
-        code_length: u4,
-        code: Vec<u1>,
-        exception_table_length: u2,
+        attribute_name_index: type_alias::u2,
+        attribute_length: type_alias::u4,
+        max_stack: type_alias::u2,
+        max_locals: type_alias::u2,
+        code_length: type_alias::u4,
+        code: Vec<type_alias::u1>,
+        exception_table_length: type_alias::u2,
         exception_table: Vec<ExceptionTableEntry>,
-        attributes_count: u2,
+        attributes_count: type_alias::u2,
         attributes: Vec<Attribute>,
     },
     /// Oracle docs: https://docs.oracle.com/javase/specs/jvms/se22/html/jvms-4.html#jvms-4.7.3
     StackMapTable {
-        attribute_name_index: u2,
-        attribute_length: u4,
-        number_of_entries: u2,
+        attribute_name_index: type_alias::u2,
+        attribute_length: type_alias::u4,
+        number_of_entries: type_alias::u2,
         entries: Vec<StackMapFrame>,
     },
     /// Oracle docs: https://docs.oracle.com/javase/specs/jvms/se22/html/jvms-4.html#jvms-4.7.5
     Exceptions {
-        attribute_name_index: u2,
-        attribute_length: u4,
-        number_of_exceptions: u2,
-        exception_index_table: Vec<u2>,
+        attribute_name_index: type_alias::u2,
+        attribute_length: type_alias::u4,
+        number_of_exceptions: type_alias::u2,
+        exception_index_table: Vec<type_alias::u2>,
     },
     /// Oracle docs: https://docs.oracle.com/javase/specs/jvms/se22/html/jvms-4.html#jvms-4.7.6
     InnerClasses {
-        attribute_name_index: u2,
-        attribute_length: u4,
-        number_of_classes: u2,
+        attribute_name_index: type_alias::u2,
+        attribute_length: type_alias::u4,
+        number_of_classes: type_alias::u2,
         classes: Vec<InnerClassEntry>,
     },
     /// Oracle docs: https://docs.oracle.com/javase/specs/jvms/se22/html/jvms-4.html#jvms-4.7.7
     EnclosingMethod {
-        attribute_name_index: u2,
-        attribute_length: u4,
-        class_index: u2,
-        method_index: u2,
+        attribute_name_index: type_alias::u2,
+        attribute_length: type_alias::u4,
+        class_index: type_alias::u2,
+        method_index: type_alias::u2,
     },
     /// Oracle docs: https://docs.oracle.com/javase/specs/jvms/se22/html/jvms-4.html#jvms-4.7.8
     Synthetic {
-        attribute_name_index: u2,
-        attribute_length: u4,
+        attribute_name_index: type_alias::u2,
+        attribute_length: type_alias::u4,
     },
     /// Oracle docs: https://docs.oracle.com/javase/specs/jvms/se22/html/jvms-4.html#jvms-4.7.9
     Signature {
-        attribute_name_index: u2,
-        attribute_length: u4,
-        signature_index: u2,
+        attribute_name_index: type_alias::u2,
+        attribute_length: type_alias::u4,
+        signature_index: type_alias::u2,
     },
     /// Oracle docs: https://docs.oracle.com/javase/specs/jvms/se22/html/jvms-4.html#jvms-4.7.10
     SourceFile {
-        attribute_name_index: u2,
-        attribute_length: u4,
-        sourcefile_index: u2,
+        attribute_name_index: type_alias::u2,
+        attribute_length: type_alias::u4,
+        sourcefile_index: type_alias::u2,
     },
     /// Oracle docs: https://docs.oracle.com/javase/specs/jvms/se22/html/jvms-4.html#jvms-4.7.11
     SourceDebugExtension {
-        attribute_name_index: u2,
-        attribute_length: u4,
+        attribute_name_index: type_alias::u2,
+        attribute_length: type_alias::u4,
         debug_extension: String,
     },
     /// Oracle docs: https://docs.oracle.com/javase/specs/jvms/se22/html/jvms-4.html#jvms-4.7.12
     LineNumberTable {
-        attribute_name_index: u2,
-        attribute_length: u4,
-        line_number_table_length: u2,
+        attribute_name_index: type_alias::u2,
+        attribute_length: type_alias::u4,
+        line_number_table_length: type_alias::u2,
         line_number_table: Vec<LineNumberEntry>,
     },
     /// Oracle docs: https://docs.oracle.com/javase/specs/jvms/se22/html/jvms-4.html#jvms-4.7.13
     LocalVariableTable {
-        attribute_name_index: u2,
-        attribute_length: u4,
-        local_variable_table_length: u2,
+        attribute_name_index: type_alias::u2,
+        attribute_length: type_alias::u4,
+        local_variable_table_length: type_alias::u2,
         local_variable_table: Vec<LocalVariableTableEntry>,
     },
     /// Oracle docs: https://docs.oracle.com/javase/specs/jvms/se22/html/jvms-4.html#jvms-4.7.14
     LocalVariableTypeTable {
-        attribute_name_index: u2,
-        attribute_length: u4,
-        local_variable_type_table_length: u2,
+        attribute_name_index: type_alias::u2,
+        attribute_length: type_alias::u4,
+        local_variable_type_table_length: type_alias::u2,
         local_variable_type_table: Vec<LocalVariableTypeTableEntry>,
     },
     /// Oracle docs: https://docs.oracle.com/javase/specs/jvms/se22/html/jvms-4.html#jvms-4.7.15
     Deprecated {
-        attribute_name_index: u2,
-        attribute_length: u4,
+        attribute_name_index: type_alias::u2,
+        attribute_length: type_alias::u4,
     },
     /// Oracle docs: https://docs.oracle.com/javase/specs/jvms/se22/html/jvms-4.html#jvms-4.7.16
     RuntimeVisibleAnnotations {
-        attribute_name_index: u2,
-        attribute_length: u4,
-        num_annotations: u2,
+        attribute_name_index: type_alias::u2,
+        attribute_length: type_alias::u4,
+        num_annotations: type_alias::u2,
         annotations: Vec<Annotation>,
     },
     /// Oracle docs: https://docs.oracle.com/javase/specs/jvms/se22/html/jvms-4.html#jvms-4.7.17
     RuntimeInvisibleAnnotations {
-        attribute_name_index: u2,
-        attribute_length: u4,
-        num_annotations: u2,
+        attribute_name_index: type_alias::u2,
+        attribute_length: type_alias::u4,
+        num_annotations: type_alias::u2,
         annotations: Vec<Annotation>,
     },
     /// Oracle docs: https://docs.oracle.com/javase/specs/jvms/se22/html/jvms-4.html#jvms-4.7.18
     RuntimeVisibleParameterAnnotations {
-        attribute_name_index: u2,
-        attribute_length: u4,
-        num_parameters: u1,
+        attribute_name_index: type_alias::u2,
+        attribute_length: type_alias::u4,
+        num_parameters: type_alias::u1,
         parameter_annotations: Vec<ParameterAnnotation>,
     },
     /// Oracle docs: https://docs.oracle.com/javase/specs/jvms/se22/html/jvms-4.html#jvms-4.7.19
     RuntimeInvisibleParameterAnnotations {
-        attribute_name_index: u2,
-        attribute_length: u4,
-        num_parameters: u1,
+        attribute_name_index: type_alias::u2,
+        attribute_length: type_alias::u4,
+        num_parameters: type_alias::u1,
         parameter_annotations: Vec<ParameterAnnotation>,
     },
     /// Oracle docs: https://docs.oracle.com/javase/specs/jvms/se22/html/jvms-4.html#jvms-4.7.20
     RuntimeVisibleTypeAnnotations {
-        attribute_name_index: u2,
-        attribute_length: u4,
-        num_parameters: u2,
+        attribute_name_index: type_alias::u2,
+        attribute_length: type_alias::u4,
+        num_parameters: type_alias::u2,
         annotations: Vec<TypeAnnotation>,
     },
     /// Oracle docs: https://docs.oracle.com/javase/specs/jvms/se22/html/jvms-4.html#jvms-4.7.21
     RuntimeInvisibleTypeAnnotations {
-        attribute_name_index: u2,
-        attribute_length: u4,
-        num_parameters: u2,
+        attribute_name_index: type_alias::u2,
+        attribute_length: type_alias::u4,
+        num_parameters: type_alias::u2,
         annotations: Vec<TypeAnnotation>,
     },
     /// Oracle docs: https://docs.oracle.com/javase/specs/jvms/se22/html/jvms-4.html#jvms-4.7.22
     AnnotationDefault {
-        attribute_name_index: u2,
-        attribute_length: u4,
+        attribute_name_index: type_alias::u2,
+        attribute_length: type_alias::u4,
         default_value: ElementValue,
     },
     /// Oracle docs: https://docs.oracle.com/javase/specs/jvms/se22/html/jvms-4.html#jvms-4.7.23
     BootstrapMethods {
-        attribute_name_index: u2,
-        attribute_length: u4,
-        num_bootstrap_methods: u2,
+        attribute_name_index: type_alias::u2,
+        attribute_length: type_alias::u4,
+        num_bootstrap_methods: type_alias::u2,
         bootstrap_methods: Vec<BootstrapMethodEntry>,
     },
     /// Oracle docs: https://docs.oracle.com/javase/specs/jvms/se22/html/jvms-4.html#jvms-4.7.24
     MethodParameters {
-        attribute_name_index: u2,
-        attribute_length: u4,
-        parameters_count: u1,
+        attribute_name_index: type_alias::u2,
+        attribute_length: type_alias::u4,
+        parameters_count: type_alias::u1,
         parameters: Vec<Parameter>,
     },
     /// Oracle docs: https://docs.oracle.com/javase/specs/jvms/se22/html/jvms-4.html#jvms-4.7.25
     Module {
-        attribute_name_index: u2,
-        attribute_length: u4,
-        module_name_index: u2,
-        module_flags: u2,
-        module_version_index: u2,
-        requires_count: u2,
+        attribute_name_index: type_alias::u2,
+        attribute_length: type_alias::u4,
+        module_name_index: type_alias::u2,
+        module_flags: type_alias::u2,
+        module_version_index: type_alias::u2,
+        requires_count: type_alias::u2,
         requires: Vec<RequiresEntry>,
-        exports_count: u2,
+        exports_count: type_alias::u2,
         exports: Vec<ExportsEntry>,
-        opens_count: u2,
+        opens_count: type_alias::u2,
         opens: Vec<OpensEntry>,
-        uses_count: u2,
-        uses_index: Vec<u2>,
-        provides_count: u2,
+        uses_count: type_alias::u2,
+        uses_index: Vec<type_alias::u2>,
+        provides_count: type_alias::u2,
         provides: Vec<ProvidesEntry>,
     },
     /// Oracle docs: https://docs.oracle.com/javase/specs/jvms/se22/html/jvms-4.html#jvms-4.7.26
     ModulePackages {
-        attribute_name_index: u2,
-        attribute_length: u4,
-        package_count: u2,
-        package_index: Vec<u2>,
+        attribute_name_index: type_alias::u2,
+        attribute_length: type_alias::u4,
+        package_count: type_alias::u2,
+        package_index: Vec<type_alias::u2>,
     },
     /// Oracle docs: https://docs.oracle.com/javase/specs/jvms/se22/html/jvms-4.html#jvms-4.7.27
     ModuleMainClass {
-        attribute_name_index: u2,
-        attribute_length: u4,
-        main_class_index: u2,
+        attribute_name_index: type_alias::u2,
+        attribute_length: type_alias::u4,
+        main_class_index: type_alias::u2,
     },
     /// Oracle docs: https://docs.oracle.com/javase/specs/jvms/se22/html/jvms-4.html#jvms-4.7.28
     NestHost {
-        attribute_name_index: u2,
-        attribute_length: u4,
-        host_class_index: u2,
+        attribute_name_index: type_alias::u2,
+        attribute_length: type_alias::u4,
+        host_class_index: type_alias::u2,
     },
     /// Oracle docs: https://docs.oracle.com/javase/specs/jvms/se22/html/jvms-4.html#jvms-4.7.29
     NestMembers {
-        attribute_name_index: u2,
-        attribute_length: u4,
-        number_of_classes: u2,
-        classes: Vec<u2>,
+        attribute_name_index: type_alias::u2,
+        attribute_length: type_alias::u4,
+        number_of_classes: type_alias::u2,
+        classes: Vec<type_alias::u2>,
     },
     /// Oracle docs: https://docs.oracle.com/javase/specs/jvms/se22/html/jvms-4.html#jvms-4.7.30
     Record {
-        attribute_name_index: u2,
-        attribute_length: u4,
-        components_count: u2,
+        attribute_name_index: type_alias::u2,
+        attribute_length: type_alias::u4,
+        components_count: type_alias::u2,
         components: Vec<RecordComponentInfo>,
     },
     /// Oracle docs: https://docs.oracle.com/javase/specs/jvms/se22/html/jvms-4.html#jvms-4.7.31
     PermittedSubclasses {
-        attribute_name_index: u2,
-        attribute_length: u4,
-        number_of_classes: u2,
-        classes: Vec<u2>,
+        attribute_name_index: type_alias::u2,
+        attribute_length: type_alias::u4,
+        number_of_classes: type_alias::u2,
+        classes: Vec<type_alias::u2>,
+    },
+    /// Oracle docs: https://docs.oracle.com/javase/specs/jvms/se22/html/jvms-4.html#jvms-4.7.1
+    ExternalAttribute {
+        attribute_name_index: type_alias::u2,
+        attribute_length: type_alias::u4,
+        info: Vec<type_alias::u1>,
     },
 }
 
@@ -1160,7 +1168,7 @@ impl Attribute {
                 buff.write_u16::<BigEndian>(attribute_name_index)?;
                 buff.write_u32::<BigEndian>(attribute_length)?;
                 buff.write_u16::<BigEndian>(number_of_exceptions)?;
-                buff.write(exception_index_table.iter().map(|e| { e.to_be() }).collect::<Vec<u2>>().align_to::<u8>().1)?;
+                buff.write(exception_index_table.iter().map(|e| { e.to_be() }).collect::<Vec<type_alias::u2>>().align_to::<u8>().1)?;
             }
             Attribute::InnerClasses { attribute_name_index, attribute_length, number_of_classes, classes } => {
                 buff.write_u16::<BigEndian>(attribute_name_index)?;
@@ -1315,7 +1323,7 @@ impl Attribute {
                 }
 
                 buff.write_u16::<BigEndian>(uses_count)?;
-                buff.write(uses_index.iter().map(|e| { e.to_be() }).collect::<Vec<u2>>().align_to::<u8>().1)?;
+                buff.write(uses_index.iter().map(|e| { e.to_be() }).collect::<Vec<type_alias::u2>>().align_to::<u8>().1)?;
 
                 buff.write_u16::<BigEndian>(provides_count)?;
                 for one_provide in provides {
@@ -1326,7 +1334,7 @@ impl Attribute {
                 buff.write_u16::<BigEndian>(attribute_name_index)?;
                 buff.write_u32::<BigEndian>(attribute_length)?;
                 buff.write_u16::<BigEndian>(package_count)?;
-                buff.write(package_index.iter().map(|e| { e.to_be() }).collect::<Vec<u2>>().align_to::<u8>().1)?;
+                buff.write(package_index.iter().map(|e| { e.to_be() }).collect::<Vec<type_alias::u2>>().align_to::<u8>().1)?;
             }
             Attribute::ModuleMainClass { attribute_name_index, attribute_length, main_class_index } => {
                 buff.write_u16::<BigEndian>(attribute_name_index)?;
@@ -1342,7 +1350,7 @@ impl Attribute {
                 buff.write_u16::<BigEndian>(attribute_name_index)?;
                 buff.write_u32::<BigEndian>(attribute_length)?;
                 buff.write_u16::<BigEndian>(number_of_classes)?;
-                buff.write(classes.iter().map(|e| { e.to_be() }).collect::<Vec<u2>>().align_to::<u8>().1)?;
+                buff.write(classes.iter().map(|e| { e.to_be() }).collect::<Vec<type_alias::u2>>().align_to::<u8>().1)?;
             }
             Attribute::Record { attribute_name_index, attribute_length, components_count, components } => {
                 buff.write_u16::<BigEndian>(attribute_name_index)?;
@@ -1356,7 +1364,12 @@ impl Attribute {
                 buff.write_u16::<BigEndian>(attribute_name_index)?;
                 buff.write_u32::<BigEndian>(attribute_length)?;
                 buff.write_u16::<BigEndian>(number_of_classes)?;
-                buff.write(classes.iter().map(|e| { e.to_be() }).collect::<Vec<u2>>().align_to::<u8>().1)?;
+                buff.write(classes.iter().map(|e| { e.to_be() }).collect::<Vec<type_alias::u2>>().align_to::<u8>().1)?;
+            }
+            Attribute::ExternalAttribute { attribute_name_index, attribute_length, info: data } => {
+                buff.write_u16::<BigEndian>(attribute_name_index)?;
+                buff.write_u32::<BigEndian>(attribute_length)?;
+                buff.write(&*data)?;
             }
         }
         Ok(())
