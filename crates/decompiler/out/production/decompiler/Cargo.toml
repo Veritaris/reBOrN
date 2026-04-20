@@ -1,0 +1,10 @@
+[package]
+name = "decompiler"
+version = "0.1.0"
+edition.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+classfile = { path = "../classfile" }
+phf = { version = "0.13.1", features = ["macros"] }

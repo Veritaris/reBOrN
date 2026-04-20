@@ -12,21 +12,21 @@ impl ClassFile {
         self,
         writer: &mut ZipWriter<BufWriter<File>>,
         filename: &str,
-        compress_level: i64,
-    ) -> Result<(), Error> {
+        compress_level: Option<i64>,
+    ) -> Result<usize, Error> {
         writer.start_file(
             filename,
             SimpleFileOptions::default()
                 .compression_method(CompressionMethod::Deflated)
-                .compression_level(Some(compress_level)),
+                .compression_level(compress_level),
         )?;
         let data: Vec<u8> = self.try_into()?;
-        writer.write(data.as_slice())?;
-        Ok(())
+        let bytes_written = writer.write(data.as_slice())?;
+        Ok(bytes_written)
     }
 }
 
-impl<'a> TryInto<Vec<u8>> for ClassFile {
+impl TryInto<Vec<u8>> for ClassFile {
     type Error = Error;
 
     fn try_into(self) -> Result<Vec<u8>, Self::Error> {
@@ -38,7 +38,7 @@ impl<'a> TryInto<Vec<u8>> for ClassFile {
 
         for entry in self.constant_pool {
             let bytes: Vec<u8> = entry.try_into()?;
-            output.write(bytes.as_slice())?;
+            let _ = output.write(bytes.as_slice())?;
         }
 
         output.write_u16::<BigEndian>(self.access_flags.into())?;

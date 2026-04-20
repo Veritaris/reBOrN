@@ -1,10 +1,10 @@
 [project]
 name = "classfile"
 version = "0.1.0"
-description = "Add your description here"
+description = "Package for generating JVM opcodes from spec"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.14"
 dependencies = [
-    "bs4>=0.0.2",
-    "lxml>=5.3.1",
+    "bs4",
+    "lxml",
 ]

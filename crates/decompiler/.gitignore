@@ -11,5 +11,4 @@ __pycache__
 *.iml
 .git
 **/*.class
-/*.jar
-**/.DS_Store
+**/*.java

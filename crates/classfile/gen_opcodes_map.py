@@ -1,45 +1,50 @@
 import dataclasses
+import functools
 import inspect
 import re
+import sys
+import typing
 import urllib.request
+from bs4 import BeautifulSoup
 from pathlib import Path
 
-from bs4 import BeautifulSoup
 
-cache_path = Path("./java_opcodes.html")
-opcodes_rs_file = Path("./src/opcodes.rs")
-lib_rs_file = Path("./src/lib.rs")
-opcodes_rs_mod = "pub mod opcodes;\n"
-opcode_spec_pattern = re.compile(r"([0-9a-z_]*?)(</em></span>)? = \d+ \((0x[0-9a-f]+)\)")
-opcode_string_pattern = re.compile(r"(?P<opname>\w+) = \d+ \((?P<opcode>0x[0-9a-f]+)\)")
-tab = "    "
-opcodes_enum_struct_rs = """
+DEFAULT_JVM_SPEC_VERSION: typing.Final = 25
+
+cache_path: typing.Final = Path("./java_opcodes.html")
+opcodes_rs_file: typing.Final = Path("./src/opcodes.rs")
+lib_rs_file: typing.Final = Path("./src/lib.rs")
+opcodes_rs_mod: typing.Final = "pub mod opcodes;\n"
+opcode_spec_pattern: typing.Final = re.compile(r"([0-9a-z_]*?)(</em></span>)? = \d+ \((0x[0-9a-f]+)\)")
+opcode_string_pattern: typing.Final = re.compile(r"(?P<opname>\w+) = \d+ \((?P<opcode>0x[0-9a-f]+)\)")
+tab: typing.Final = "    "
+opcodes_enum_struct_rs: typing.Final = """
 #[non_exhaustive]
 pub struct Opcodes;
 """
-opcode_struct_rs = """
+opcode_struct_rs: typing.Final = """
 pub struct Opcode {
     pub opcode: u8,
     pub opname: &'static str,
     pub oplen: u8,
 }
 """
-opcodes_enum_struct_impl_head_rs = """
+opcodes_enum_struct_impl_head_rs: typing.Final = """
 #[allow(unused)]
 impl Opcodes {
 """
-opcodes_enum_struct_impl_tail_rs = """
+opcodes_enum_struct_impl_tail_rs: typing.Final = """
 }
 """
-opcodes_byte_map_head_rs = """
+opcodes_byte_map_head_rs: typing.Final = """
 pub const OPCODES_MAP: [Option<Opcode>; 255] = [
 """
-opcodes_byte_map_tail_rs = """
+opcodes_byte_map_tail_rs: typing.Final = """
 ];
 """
 
 
-@dataclasses.dataclass(kw_only=True)
+@dataclasses.dataclass(kw_only=True, frozen=True)
 class Opcode:
     opname: str
     opcode: int
@@ -48,9 +53,20 @@ class Opcode:
     stack_pop: int
     stack_push: int
 
-    def into_rs(self) -> str:
-        return f"Opcode {{ opcode: 0x{self.opcode:02x}, opname: \"{self.opname}\", oplen: {self.oplen} }}"
-
+    @property
+    @functools.lru_cache(maxsize=None)
+    def rs_code(self) -> str:
+        # return f"Opcode {{ opcode: 0x{self.opcode:02x}, opname: \"{self.opname}\", oplen: {self.oplen} }}"
+        return f"""Opcode {{
+        opcode: 0x{self.opcode:02x},
+        opname: \"{self.opname}\",
+        oplen: {self.oplen},
+    }}"""
+    
+    @property
+    @functools.lru_cache(maxsize=None)
+    def rs_const(self) -> str:
+        return f"{tab}pub const {self.opname.upper()}: Opcode = {self.rs_code};"
 
 def download_jvm_opcodes_spec(jvm_version: int) -> str:
     req = urllib.request.urlopen(
@@ -60,25 +76,25 @@ def download_jvm_opcodes_spec(jvm_version: int) -> str:
     return req.read().decode("utf-8")
 
 
-def fetch_jvm_opcodes_spec(jvm_version: int = 23) -> str:
+def fetch_jvm_opcodes_spec(jvm_version: int = DEFAULT_JVM_SPEC_VERSION) -> str:
     if not cache_path.exists():
         print(f"Fetching opcodes for java se{jvm_version}")
         spec = download_jvm_opcodes_spec(jvm_version)
         with cache_path.open(mode="w") as f:
             f.write(spec)
-    else:
-        with cache_path.open(mode="r") as f:
-            spec = f.read()
+        return spec
+
+    with cache_path.open(mode="r") as f:
+        spec = f.read()
     return spec
 
 
 def gen_opcodes_structs(opcodes: list[Opcode]) -> str:
     opcodes_rs_code = opcodes_enum_struct_rs + opcode_struct_rs + opcodes_enum_struct_impl_head_rs
-    for opcode in opcodes:
-        opcodes_rs_code += f"{tab}pub const {opcode.opname.upper()}: Opcode = {opcode.into_rs()};\n"
-
+    opcodes_rs_code += "\n".join(opcode.rs_const for opcode in opcodes)
     opcodes_rs_code += opcodes_enum_struct_impl_tail_rs
     opcodes_rs_code = inspect.cleandoc(opcodes_rs_code)
+    opcodes_rs_code += "\n"
     return opcodes_rs_code
 
 
@@ -105,20 +121,22 @@ def gen_opcodes_byte_map(opcodes: list[Opcode]) -> str:
     return opcodes_byte_map
 
 
-if __name__ == "__main__":
-    opcodes_spec = fetch_jvm_opcodes_spec()
+def gen_opcodes_rs(spec_version: int):
+    opcodes_spec = fetch_jvm_opcodes_spec(jvm_version=spec_version)
     soup = BeautifulSoup(opcodes_spec, "lxml")
     opcodes_pars = soup.find_all("div", class_="section-execution")
     opcodes: list[Opcode] = []
 
     for par in opcodes_pars[1:]:
-        (_, op_par, op_operands_par, op_forms_par, op_stack_par, *rem) = par.find_all("div", recursive=False)
+        (_, op_par, op_operands_par, op_forms_par, op_stack_par, *rem) = par.find_all(
+            "div", recursive=False
+        )
 
         opcode_operands = op_operands_par.find_all("span", class_="emphasis")
         opcode_forms = op_forms_par.find_all("p", class_="norm")
 
         opcode_len = 0
-        for opcode_operand in opcode_operands:
+        for _ in opcode_operands:
             opcode_len += 1
 
         # skip first example
@@ -139,7 +157,10 @@ if __name__ == "__main__":
 
     opcodes = list(sorted(opcodes, key=lambda op: op.opname))
 
-    opcodes_rs_code = ""
+    opcodes_rs_code = """//! This file is autogenerated by gen_opcodes_map.py
+/// You should not edit this file manually
+///
+"""
     opcodes_rs_code += gen_opcodes_structs(opcodes)
     opcodes_rs_code += gen_opcodes_byte_map(opcodes)
 
@@ -149,9 +170,24 @@ if __name__ == "__main__":
     with lib_rs_file.open(mode="r") as f:
         lib_rs = f.readlines()
 
-    if not opcodes_rs_mod in lib_rs:
+    if opcodes_rs_mod not in lib_rs:
         lib_rs.append(opcodes_rs_mod)
 
     with lib_rs_file.open(mode="w") as f:
         for line in lib_rs:
             f.write(line)
+    
+if __name__ == "__main__":
+    args = sys.argv
+    jvm_spec_version: int = DEFAULT_JVM_SPEC_VERSION
+    if len(args) >= 2:
+        try:
+            jvm_spec_version = int(args[1])
+        except ValueError:
+            jvm_spec_version = DEFAULT_JVM_SPEC_VERSION
+            print(
+                f"Passed wrong jvm spec version - expected number 0..{DEFAULT_JVM_SPEC_VERSION}, got '{args[1]}'. "
+                f"Falling back to default jvm spec version={DEFAULT_JVM_SPEC_VERSION}"
+            )
+    
+    gen_opcodes_rs(jvm_spec_version)

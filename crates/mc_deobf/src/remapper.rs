@@ -1,31 +1,34 @@
-use crate::cli::RebornCliArgs;
+use crate::args::RebornCliArgs;
 use crate::mappings;
+use crate::mappings::{DeobfMappingsType, Mappings};
 use classfile::classfile::ClassFile;
 use indoc::indoc;
 use linked_hash_map::LinkedHashMap;
-use std::io::{stdout, BufReader, BufWriter, Cursor, Error, Read, Write};
+use std::io::{BufReader, BufWriter, Cursor, Error, Read, Write, stdout};
 use std::ops::AddAssign;
 use std::path::{Path, PathBuf};
 use std::process::exit;
 use std::sync::{Arc, Mutex};
-use std::thread;
 use std::thread::JoinHandle;
 use utils::cache;
 
-const REMAPPED_SUFFIX: &'static str = "-remapped.jar";
-const JAR_SUFFIX: &'static str = ".jar";
+const REMAPPED_SUFFIX: &str = "-remapped-{channel}-{channel_version}.jar";
+const REMAPPED_CUSTOM_SUFFIX: &str = "-remapped-custom.jar";
+const JAR_SUFFIX: &str = ".jar";
 
-pub fn build_output_file_name(input_file_name: String, path: &Path) -> String {
-    let canonical_path = match path.canonicalize() {
+pub fn build_output_file_name<P: AsRef<Path>>(input_file_name: String, path: P, args: &RebornCliArgs) -> String {
+    let canonical_path = match path.as_ref().canonicalize() {
         Ok(it) => it,
         Err(err) => {
             eprintln!("{}", err);
             exit(-1);
         }
     };
-    if path.is_dir() {
+
+    let filename_suffix = &*build_mappings_typed_based_filename_suffix(args);
+    if path.as_ref().is_dir() {
         canonical_path
-            .join(input_file_name.strip_suffix(JAR_SUFFIX).unwrap().to_owned() + REMAPPED_SUFFIX)
+            .join(input_file_name.strip_suffix(JAR_SUFFIX).unwrap().to_owned() + filename_suffix)
             .to_str()
             .unwrap()
             .to_string()
@@ -36,11 +39,11 @@ pub fn build_output_file_name(input_file_name: String, path: &Path) -> String {
             .strip_suffix(JAR_SUFFIX)
             .unwrap()
             .to_owned()
-            + REMAPPED_SUFFIX
+            + filename_suffix
     }
 }
 
-pub fn remap_files(args: &RebornCliArgs, files: &Vec<String>) {
+pub fn remap_files(args: &RebornCliArgs, files: &[String]) {
     let files_amount = files.len();
 
     let cpus = num_cpus::get();
@@ -52,7 +55,7 @@ pub fn remap_files(args: &RebornCliArgs, files: &Vec<String>) {
         let thread_args = args.clone();
         let cnt = counter.clone();
 
-        let handle = thread::spawn(move || {
+        let handle = std::thread::spawn(move || {
             for (i, file_path) in group.iter().enumerate() {
                 cnt.lock().unwrap().add_assign(1);
                 println!("\rProcessing [{}/{files_amount}]", cnt.lock().unwrap());
@@ -69,6 +72,21 @@ pub fn remap_files(args: &RebornCliArgs, files: &Vec<String>) {
     }
 }
 
+fn build_fallback_filename(args: &RebornCliArgs, input_file_name: &str) -> String {
+    input_file_name.strip_suffix(JAR_SUFFIX).unwrap().to_owned() + &*build_mappings_typed_based_filename_suffix(args)
+}
+
+fn build_mappings_typed_based_filename_suffix(args: &RebornCliArgs) -> String {
+    let suffix = match args.mappings_type {
+        DeobfMappingsType::VersionsJSON => &*REMAPPED_SUFFIX
+            .replace("{channel}", &args.mappings_channel)
+            .replace("{channel_version}", &args.mappings_version),
+
+        DeobfMappingsType::Custom => REMAPPED_CUSTOM_SUFFIX,
+    };
+    String::from(suffix)
+}
+
 pub fn remap_file(args: &RebornCliArgs, input_source_index: usize, input_file_full_path: &String) {
     let input_file_name = Path::new(input_file_full_path)
         .file_name()
@@ -78,19 +96,18 @@ pub fn remap_file(args: &RebornCliArgs, input_source_index: usize, input_file_fu
         .to_string();
 
     let output_file_path = match args.output {
-        None => input_file_name.strip_suffix(JAR_SUFFIX).unwrap().to_owned() + REMAPPED_SUFFIX,
+        None => build_fallback_filename(args, &input_file_name),
         Some(ref res) => {
-            if &res.len() != &args.input.len() {
+            if res.len() != args.input.len() {
                 match &res.len() {
-                    1 => build_output_file_name(input_file_name, Path::new(res.get(0).unwrap())),
+                    1 => build_output_file_name(input_file_name, Path::new(res.first().unwrap()), args),
                     _ => {
-                        println!("output must contain N entries where N is number of entry files or only 1 entry");
-                        input_file_name.strip_suffix(JAR_SUFFIX).unwrap().to_owned()
-                            + REMAPPED_SUFFIX
+                        println!("output must contain N entries where N is a number of entry files or only one entry");
+                        build_fallback_filename(args, &input_file_name)
                     }
                 }
             } else {
-                build_output_file_name(input_file_name, Path::new(res.get(0).unwrap()))
+                build_output_file_name(input_file_name, Path::new(res.first().unwrap()), args)
             }
         }
     };
@@ -107,7 +124,10 @@ pub fn remap_file(args: &RebornCliArgs, input_source_index: usize, input_file_fu
         .join(args.game_version.as_str())
         .join(args.mappings_channel.as_str())
         .join(args.mappings_version.as_str());
-    let mut mappings = mappings::load_all_mappings(mapping_dir).unwrap();
+    let mut mappings = match args.mappings_type {
+        DeobfMappingsType::VersionsJSON => mappings::load_all_mappings(mapping_dir).unwrap(),
+        DeobfMappingsType::Custom => Mappings::default(),
+    };
 
     if args.verbose > 0 {
         println!("debug: {:?}", args.debug);
@@ -117,7 +137,7 @@ pub fn remap_file(args: &RebornCliArgs, input_source_index: usize, input_file_fu
         println!("game version: {}", args.game_version);
         println!("using mappings: {}", args.mappings_channel);
     }
-    if args.extra_mappings.len() > 0 {
+    if !args.extra_mappings.is_empty() {
         if args.verbose > 0 {
             println!("using extra mappings:");
         }
@@ -131,9 +151,9 @@ pub fn remap_file(args: &RebornCliArgs, input_source_index: usize, input_file_fu
     common_mappings.extend(mappings.methods);
     common_mappings.extend(mappings.params);
 
-    match remap_jar(&mut target_jar, output_file_path, &args, &common_mappings) {
-        Ok(_) => {}
-        Err(_) => {}
+    match remap_jar(&mut target_jar, &output_file_path, args, &common_mappings) {
+        Ok(_) => println!("remap success"),
+        Err(err) => eprintln!("remap failed: {}", err),
     };
 
     println!("Writing remapped file");
@@ -158,6 +178,7 @@ pub fn prepare_mappings(args: &RebornCliArgs) {
             game_version.as_str(),
             mappings_channel.as_str(),
             mappings_version.as_str(),
+            None::<fn()>,
         );
     });
 
@@ -184,10 +205,7 @@ pub fn gather_input_files(input_files: &mut Vec<String>, dir_files: &Vec<String>
                             {
                                 None
                             } else {
-                                match file.path().to_str() {
-                                    Some(path) => Some(String::from(path)),
-                                    None => None,
-                                }
+                                file.path().to_str().map(String::from)
                             }
                         }
                         Err(_) => None,
@@ -205,26 +223,32 @@ pub fn gather_input_files(input_files: &mut Vec<String>, dir_files: &Vec<String>
 
 pub fn remap_jar(
     jar: &mut zip::ZipArchive<BufReader<std::fs::File>>,
-    output_file_path: String,
+    output_file_path: &str,
     args: &RebornCliArgs,
     mappings: &LinkedHashMap<String, String>,
 ) -> Result<(), Error> {
-    let output_path = Path::new(output_file_path.as_str());
+    let output_path = Path::new(output_file_path);
     let output_file = std::fs::File::create(output_path)?;
     let output_buffer = BufWriter::new(output_file);
     let mut output_jar = zip::ZipWriter::new(output_buffer);
 
     let files_amount = jar.len();
+    println!("found {} files entries in archive", &files_amount);
 
     for i in 0..files_amount {
         let file: zip::read::ZipFile<'_, BufReader<std::fs::File>> = jar.by_index(i)?;
+        if file.is_dir() {
+            continue;
+        }
+
         let mangled_name = PathBuf::clone(&file.mangled_name());
         let filename = mangled_name.to_str().unwrap();
         let file_size = file.size();
+        println!("trying to remap {}th file with name {}", &i, &filename);
 
         if filename.ends_with(".class") {
             match args.verbose {
-                0 | 1 | 2 => (),
+                0..=2 => (),
                 _ => {
                     let msg = format!(
                         indoc!(
@@ -266,11 +290,9 @@ pub fn remap_jar(
                     continue;
                 }
             };
-            classfile.write(&mut output_jar, filename, args.deflate_compress_level)?;
+            classfile.write(&mut output_jar, filename, args.get_deflate_compress_level())?;
         } else if file.is_file()
-            && (!args.strip_resources
-                || filename.eq("MANIFEST.MF")
-                || filename.ends_with("_at.cfg"))
+            && (!args.strip_resources || filename.eq("MANIFEST.MF") || filename.ends_with("_at.cfg"))
         {
             match output_jar.raw_copy_file(file) {
                 Ok(_) => {

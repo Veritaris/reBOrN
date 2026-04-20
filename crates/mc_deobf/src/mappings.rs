@@ -3,15 +3,32 @@ use linked_hash_map::LinkedHashMap;
 use serde::Deserialize;
 use std::fmt::{Debug, Display, Formatter};
 use std::fs;
+use std::fs::read_to_string;
 use std::path::{Path, PathBuf};
 
 pub const MAPPINGS_DIR: &str = "resources/mappings/1.7.10/stable/12"; // TODO(Veritaris): remove after cache && mappings downloading implemented successfully
 
-#[derive(Debug, Copy, Clone, ValueEnum)]
+#[derive(PartialOrd, PartialEq, Debug, Copy, Clone, ValueEnum, serde::Deserialize, serde::Serialize)]
 pub enum ModLoader {
-    FORGE,
-    NEOFORGE,
-    FABRIC,
+    Forge,
+    NeoForge,
+    Fabric,
+}
+
+#[derive(PartialOrd, PartialEq, Debug, Copy, Clone, ValueEnum, serde::Deserialize, serde::Serialize)]
+pub enum DeobfMappingsType {
+    VersionsJSON,
+    Custom,
+}
+
+impl Display for ModLoader {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ModLoader::Forge => f.write_str("Forge"),
+            ModLoader::NeoForge => f.write_str("NeoForge"),
+            ModLoader::Fabric => f.write_str("Fabric"),
+        }
+    }
 }
 
 #[allow(unused)]
@@ -51,6 +68,7 @@ pub struct MappingsSource {
     pub kind: MappingKind,
 }
 
+#[derive(Default)]
 pub struct Mappings {
     pub fields: LinkedHashMap<String, String>,
     pub methods: LinkedHashMap<String, String>,
@@ -97,38 +115,57 @@ impl Display for MappingSourceParseError {
 
 pub fn merge_mappings(extra_mappings: &Vec<String>, mappings: &mut Mappings) {
     for mapping_source in extra_mappings {
-        match parse_mappings_source(&mapping_source) {
+        match parse_mappings_source(mapping_source) {
             Ok(source) => {
+                let table_to_populate = match source.kind {
+                    MappingKind::Fields => &mut mappings.fields,
+                    MappingKind::Methods => &mut mappings.methods,
+                    MappingKind::Params => &mut mappings.params,
+                };
+
                 match source.source_type {
-                    MappingsSourceType::Inline => {
-                        let values: Vec<(&str, &str)> = source
-                            .source
-                            .split(";")
-                            .into_iter()
-                            .filter_map(|e| match utils::utils::split_once(e, "=") {
-                                None => None,
-                                Some((k, v)) => Some((k, v)),
-                            })
-                            .collect();
-                        match source.kind {
-                            MappingKind::Fields => {
-                                for (k, v) in values {
-                                    mappings.fields.insert(String::from(k), String::from(v));
+                    MappingsSourceType::LocalFile => {
+                        let mappings_url = match url::Url::parse(&source.source) {
+                            Ok(url) => url,
+                            Err(err) => {
+                                eprintln!(
+                                    "Unable to parse mappings file location ({}): error: {}",
+                                    source.source, err
+                                );
+                                continue;
+                            }
+                        };
+                        if mappings_url.scheme() != "file" {
+                            eprintln!(
+                                "file:// scheme expected, {} provided ({})",
+                                mappings_url.scheme(),
+                                source.source
+                            );
+                            continue;
+                        }
+                        match read_to_string(mappings_url.path()) {
+                            Ok(content) => {
+                                let parsed_mappings = tsrg_trie::csv_parser::parse_mappings_csv(content);
+                                for (k, v) in parsed_mappings {
+                                    table_to_populate.insert(k, v.mcp_name.unwrap_or("".to_string()));
                                 }
                             }
-                            MappingKind::Methods => {
-                                for (k, v) in values {
-                                    mappings.methods.insert(String::from(k), String::from(v));
-                                }
-                            }
-                            MappingKind::Params => {
-                                for (k, v) in values {
-                                    mappings.params.insert(String::from(k), String::from(v));
-                                }
+                            Err(err) => {
+                                eprintln!("Unable to load mappings file {}, err={}", source.source, err);
                             }
                         };
                     }
-                    _ => {}
+                    MappingsSourceType::WebFile => {
+                        todo!("Not yet implemented, sorry");
+                    }
+                    MappingsSourceType::Inline => {
+                        let values: Vec<(&str, &str)> =
+                            source.source.split(";").filter_map(|e| e.split_once("=")).collect();
+
+                        for (k, v) in values {
+                            table_to_populate.insert(String::from(k), String::from(v));
+                        }
+                    }
                 }
                 println!("    {:?}", source);
             }
@@ -139,8 +176,8 @@ pub fn merge_mappings(extra_mappings: &Vec<String>, mappings: &mut Mappings) {
     }
 }
 
-pub fn parse_mappings_source(mappings: &String) -> Result<MappingsSource, MappingSourceParseError> {
-    let (m_kind, f_source) = match utils::utils::split_once(mappings, ":") {
+pub fn parse_mappings_source(mappings: &str) -> Result<MappingsSource, MappingSourceParseError> {
+    let (m_kind, f_source) = match mappings.split_once(":") {
         None => {
             return Err(MappingSourceParseError);
         }
@@ -164,25 +201,22 @@ pub fn parse_mappings_source(mappings: &String) -> Result<MappingsSource, Mappin
         MappingsSourceType::Inline
     };
 
-    return Ok(MappingsSource {
+    Ok(MappingsSource {
         source_type,
         source: f_source.to_string(),
         kind,
-    });
+    })
 }
 
 pub fn get_mappings_file_path<P: AsRef<Path>>(mappings_dir: P, m_type: &MappingKind) -> PathBuf {
-    return mappings_dir.as_ref().join(match m_type {
+    mappings_dir.as_ref().join(match m_type {
         MappingKind::Fields => "fields.csv",
         MappingKind::Methods => "methods.csv",
         MappingKind::Params => "params.csv",
-    });
+    })
 }
 
-fn load_mappings_with_default<P: AsRef<Path>>(
-    mappings_dir: P,
-    kind: MappingKind,
-) -> LinkedHashMap<String, String> {
+fn load_mappings_with_default<P: AsRef<Path>>(mappings_dir: P, kind: MappingKind) -> LinkedHashMap<String, String> {
     match load_mappings(&mappings_dir, &kind) {
         Ok(it) => it,
         Err(err) => {
@@ -213,7 +247,7 @@ pub fn load_mappings<P: AsRef<Path>>(
     mappings_dir: &P,
     mapping_type: &MappingKind,
 ) -> Result<LinkedHashMap<String, String>, std::io::Error> {
-    let m_path = get_mappings_file_path(mappings_dir, &mapping_type);
+    let m_path = get_mappings_file_path(mappings_dir, mapping_type);
     let file = fs::File::open(m_path)?;
     let buffered_reader = std::io::BufReader::new(file);
     let mut csv_reader = csv::Reader::from_reader(buffered_reader);
@@ -221,13 +255,11 @@ pub fn load_mappings<P: AsRef<Path>>(
     let mut sorted: Vec<(String, String)> = match mapping_type {
         MappingKind::Fields | MappingKind::Methods => csv_reader
             .deserialize::<MappingRecord>()
-            .into_iter()
             .map(|r| r.unwrap())
             .map(|r| (r.searge, r.name.clone()))
             .collect(),
         MappingKind::Params => csv_reader
             .deserialize::<ParamMappingRecord>()
-            .into_iter()
             .map(|r| r.unwrap())
             .map(|r| (r.param, r.name.clone()))
             .collect(),
@@ -235,5 +267,5 @@ pub fn load_mappings<P: AsRef<Path>>(
 
     sorted.sort_by_key(|e| e.0.clone());
     let mappings = LinkedHashMap::from_iter(sorted);
-    return Ok(mappings);
+    Ok(mappings)
 }

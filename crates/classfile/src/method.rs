@@ -3,7 +3,7 @@ use crate::type_alias;
 use byteorder::{BigEndian, WriteBytesExt};
 use std::io::{Error, Write};
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 pub struct Method {
     pub access_flags: type_alias::u2,
     pub name_index: type_alias::u2,
@@ -13,17 +13,22 @@ pub struct Method {
 }
 
 impl Method {
-    pub fn write(self, buff: &mut Vec<u8>) -> Result<(), Error> {
+    pub fn write(self, buff: &mut Vec<u8>) -> Result<usize, Error> {
         buff.write_u16::<BigEndian>(self.access_flags)?;
         buff.write_u16::<BigEndian>(self.name_index)?;
         buff.write_u16::<BigEndian>(self.descriptor_index)?;
         buff.write_u16::<BigEndian>(self.attributes_count)?;
+        let mut bytes_written = size_of::<u16>() + size_of::<u16>() + size_of::<u16>() + size_of::<u16>();
 
         for attr in self.attributes {
-            let bytes: Vec<u8> = attr.try_into()?;
-            buff.write(bytes.as_slice())?;
+            bytes_written += buff
+                .write(TryInto::<Vec<u8>>::try_into(attr)?.as_slice())
+                .unwrap_or_else(|err| {
+                    eprintln!("{}", err);
+                    0
+                });
         }
-        Ok(())
+        Ok(bytes_written)
     }
 }
 
@@ -39,8 +44,7 @@ impl TryInto<Vec<u8>> for Method {
         output_bytes.write_u16::<BigEndian>(self.attributes_count)?;
 
         for attr in self.attributes {
-            let bytes: Vec<u8> = attr.try_into()?;
-            output_bytes.write(bytes.as_slice())?;
+            output_bytes.write_all(TryInto::<Vec<u8>>::try_into(attr)?.as_slice())?;
         }
 
         Ok(output_bytes)

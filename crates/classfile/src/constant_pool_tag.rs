@@ -5,24 +5,27 @@ use std::io::{Error, Write};
 
 pub const CONTINUATION_TAG: ConstantPoolTag = ConstantPoolTag::ContinuationTag { tag: 0 };
 
-// Utf8	                    1	45.3	1.0.2
-// Integer	                3	45.3	1.0.2
-// Float	                4	45.3	1.0.2
-// Long	                    5	45.3	1.0.2
-// Double	                6	45.3	1.0.2
-// Class	                7	45.3	1.0.2
-// String	                8	45.3	1.0.2
-// Fieldref	                9	45.3	1.0.2
-// Methodref	            10	45.3	1.0.2
-// InterfaceMethodref	    11	45.3	1.0.2
-// NameAndType	            12	45.3	1.0.2
-// MethodHandle	            15	51.0	7
-// MethodType	            16	51.0	7
-// Dynamic	                17	55.0	11
-// InvokeDynamic	        18	51.0	7
-// Module	                19	53.0	9
-// Package	                20	53.0	9
-#[derive(Debug, Clone)]
+///```javadoc
+/// Utf8                        1   45.3    1.0.2
+/// Integer                     3   45.3    1.0.2
+/// Float                       4   45.3    1.0.2
+/// Long                        5   45.3    1.0.2
+/// Double                      6   45.3    1.0.2
+/// Class                       7   45.3    1.0.2
+/// String                      8   45.3    1.0.2
+/// Fieldref                    9   45.3    1.0.2
+/// Methodref                   10  45.3    1.0.2
+/// InterfaceMethodref          11  45.3    1.0.2
+/// NameAndType                 12  45.3    1.0.2
+/// MethodHandle                15  51.0    7
+/// MethodType                  16  51.0    7
+/// Dynamic                     17  55.0    11
+/// InvokeDynamic               18  51.0    7
+/// Module                      19  53.0    9
+/// Package                     20  53.0    9
+/// ```
+///
+#[derive(Clone, Debug)]
 pub enum ConstantPoolTag {
     ContinuationTag {
         tag: type_alias::u1,
@@ -141,7 +144,7 @@ impl ConstantPoolTag {
         string: ConstantPoolTag,
         visited_entries: Option<Vec<type_alias::u2>>,
     ) -> String {
-        let visited_entries = visited_entries.unwrap_or(vec![]);
+        let visited_entries = visited_entries.unwrap_or_default();
         match string {
             ConstantPoolTag::Utf8 { _value, .. } => _value,
             ConstantPoolTag::String { string_index, .. } => {
@@ -151,11 +154,7 @@ impl ConstantPoolTag {
 
                 match constant_pool.get(string_index as usize) {
                     None => format!("<error: tag with index={string_index} does not exist>"),
-                    Some(tag) => Self::string_tag_to_string(
-                        constant_pool,
-                        tag.clone(),
-                        Some(visited_entries),
-                    ),
+                    Some(tag) => Self::string_tag_to_string(constant_pool, tag.clone(), Some(visited_entries)),
                 }
             }
             _ => "<error: not String or Utf8 tag>".to_string(),
@@ -174,30 +173,24 @@ impl ConstantPoolTag {
             ConstantPoolTag::ContinuationTag { .. } => {}
             ConstantPoolTag::Utf8 { length, bytes, .. } => {
                 buff.write_u16::<BigEndian>(length)?;
-                buff.write(bytes.as_slice())?;
+                let _ = buff.write(bytes.as_slice())?;
             }
             ConstantPoolTag::Integer { bytes, .. } => buff.write_u32::<BigEndian>(bytes)?,
             ConstantPoolTag::Float { bytes, .. } => buff.write_u32::<BigEndian>(bytes)?,
             ConstantPoolTag::Long {
-                high_bytes,
-                low_bytes,
-                ..
+                high_bytes, low_bytes, ..
             } => {
                 buff.write_u32::<BigEndian>(high_bytes)?;
                 buff.write_u32::<BigEndian>(low_bytes)?;
             }
             ConstantPoolTag::Double {
-                high_bytes,
-                low_bytes,
-                ..
+                high_bytes, low_bytes, ..
             } => {
                 buff.write_u32::<BigEndian>(high_bytes)?;
                 buff.write_u32::<BigEndian>(low_bytes)?;
             }
             ConstantPoolTag::Class { name_index, .. } => buff.write_u16::<BigEndian>(name_index)?,
-            ConstantPoolTag::String { string_index, .. } => {
-                buff.write_u16::<BigEndian>(string_index)?
-            }
+            ConstantPoolTag::String { string_index, .. } => buff.write_u16::<BigEndian>(string_index)?,
             ConstantPoolTag::Fieldref {
                 class_index,
                 name_and_type_index,
@@ -238,9 +231,7 @@ impl ConstantPoolTag {
                 buff.write_u8(reference_kind)?;
                 buff.write_u16::<BigEndian>(reference_index)?;
             }
-            ConstantPoolTag::MethodType {
-                descriptor_index, ..
-            } => {
+            ConstantPoolTag::MethodType { descriptor_index, .. } => {
                 buff.write_u16::<BigEndian>(descriptor_index)?;
             }
             ConstantPoolTag::Dynamic {
@@ -259,12 +250,8 @@ impl ConstantPoolTag {
                 buff.write_u16::<BigEndian>(bootstrap_method_attr_index)?;
                 buff.write_u16::<BigEndian>(name_and_type_index)?;
             }
-            ConstantPoolTag::Module { name_index, .. } => {
-                buff.write_u16::<BigEndian>(name_index)?
-            }
-            ConstantPoolTag::Package { name_index, .. } => {
-                buff.write_u16::<BigEndian>(name_index)?
-            }
+            ConstantPoolTag::Module { name_index, .. } => buff.write_u16::<BigEndian>(name_index)?,
+            ConstantPoolTag::Package { name_index, .. } => buff.write_u16::<BigEndian>(name_index)?,
         };
         Ok(())
     }
@@ -275,111 +262,7 @@ impl TryInto<Vec<u8>> for ConstantPoolTag {
 
     fn try_into(self) -> Result<Vec<u8>, Self::Error> {
         let mut output_bytes = Vec::new();
-
-        // skip writing anything on ContinuationTag met
-        match self {
-            ConstantPoolTag::ContinuationTag { .. } => return Ok(output_bytes),
-            _ => output_bytes.write_u8(self.jvm_tag())?,
-        };
-
-        match self {
-            ConstantPoolTag::ContinuationTag { .. } => {}
-            ConstantPoolTag::Utf8 { length, bytes, .. } => {
-                output_bytes.write_u16::<BigEndian>(length)?;
-                output_bytes.write(bytes.as_slice())?;
-            }
-            ConstantPoolTag::Integer { bytes, .. } => output_bytes.write_u32::<BigEndian>(bytes)?,
-            ConstantPoolTag::Float { bytes, .. } => output_bytes.write_u32::<BigEndian>(bytes)?,
-            ConstantPoolTag::Long {
-                high_bytes,
-                low_bytes,
-                ..
-            } => {
-                output_bytes.write_u32::<BigEndian>(high_bytes)?;
-                output_bytes.write_u32::<BigEndian>(low_bytes)?;
-            }
-            ConstantPoolTag::Double {
-                high_bytes,
-                low_bytes,
-                ..
-            } => {
-                output_bytes.write_u32::<BigEndian>(high_bytes)?;
-                output_bytes.write_u32::<BigEndian>(low_bytes)?;
-            }
-            ConstantPoolTag::Class { name_index, .. } => {
-                output_bytes.write_u16::<BigEndian>(name_index)?
-            }
-            ConstantPoolTag::String { string_index, .. } => {
-                output_bytes.write_u16::<BigEndian>(string_index)?
-            }
-            ConstantPoolTag::Fieldref {
-                class_index,
-                name_and_type_index,
-                ..
-            } => {
-                output_bytes.write_u16::<BigEndian>(class_index)?;
-                output_bytes.write_u16::<BigEndian>(name_and_type_index)?;
-            }
-            ConstantPoolTag::Methodref {
-                class_index,
-                name_and_type_index,
-                ..
-            } => {
-                output_bytes.write_u16::<BigEndian>(class_index)?;
-                output_bytes.write_u16::<BigEndian>(name_and_type_index)?;
-            }
-            ConstantPoolTag::InterfaceMethodref {
-                class_index,
-                name_and_type_index,
-                ..
-            } => {
-                output_bytes.write_u16::<BigEndian>(class_index)?;
-                output_bytes.write_u16::<BigEndian>(name_and_type_index)?;
-            }
-            ConstantPoolTag::NameAndType {
-                name_index,
-                descriptor_index,
-                ..
-            } => {
-                output_bytes.write_u16::<BigEndian>(name_index)?;
-                output_bytes.write_u16::<BigEndian>(descriptor_index)?;
-            }
-            ConstantPoolTag::MethodHandle {
-                reference_kind,
-                reference_index,
-                ..
-            } => {
-                output_bytes.write_u8(reference_kind)?;
-                output_bytes.write_u16::<BigEndian>(reference_index)?;
-            }
-            ConstantPoolTag::MethodType {
-                descriptor_index, ..
-            } => {
-                output_bytes.write_u16::<BigEndian>(descriptor_index)?;
-            }
-            ConstantPoolTag::Dynamic {
-                bootstrap_method_attr_index,
-                name_and_type_index,
-                ..
-            } => {
-                output_bytes.write_u16::<BigEndian>(bootstrap_method_attr_index)?;
-                output_bytes.write_u16::<BigEndian>(name_and_type_index)?;
-            }
-            ConstantPoolTag::InvokeDynamic {
-                bootstrap_method_attr_index,
-                name_and_type_index,
-                ..
-            } => {
-                output_bytes.write_u16::<BigEndian>(bootstrap_method_attr_index)?;
-                output_bytes.write_u16::<BigEndian>(name_and_type_index)?;
-            }
-            ConstantPoolTag::Module { name_index, .. } => {
-                output_bytes.write_u16::<BigEndian>(name_index)?
-            }
-            ConstantPoolTag::Package { name_index, .. } => {
-                output_bytes.write_u16::<BigEndian>(name_index)?
-            }
-        };
+        self.write(&mut output_bytes)?;
         Ok(output_bytes)
     }
 }
@@ -390,7 +273,7 @@ impl Display for ConstantPoolTag {
     }
 }
 
-#[derive(Debug)]
+#[derive(Copy, Clone, Debug)]
 pub enum ConstantPoolJvmTag {
     INVALID = 0,
     Utf8 = 1,
@@ -410,12 +293,6 @@ pub enum ConstantPoolJvmTag {
     InvokeDynamic = 18,
     Module = 19,
     Package = 20,
-}
-
-impl Into<u8> for ConstantPoolJvmTag {
-    fn into(self) -> u8 {
-        self as u8
-    }
 }
 
 impl From<u8> for ConstantPoolJvmTag {

@@ -1,8 +1,10 @@
+use std::fmt::{Debug, Display, Formatter};
 use std::io::{BufReader, Error, ErrorKind, Read, Write};
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 
 use crate::access_flags::AccessFlags;
+use crate::opcodes::OPCODES_MAP;
 use crate::type_alias;
 
 ///```javadoc
@@ -12,7 +14,7 @@ use crate::type_alias;
 ///     type_alias::u2 catch_type;
 /// } exception_table[exception_table_length];
 ///```
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 pub struct ExceptionTableEntry {
     pub start_pc: type_alias::u2,
     pub end_pc: type_alias::u2,
@@ -21,34 +23,31 @@ pub struct ExceptionTableEntry {
 }
 
 impl ExceptionTableEntry {
-    pub fn write(self, buff: &mut Vec<u8>) -> Result<(), Error> {
+    pub fn write<B: Write>(self, buff: &mut B) -> Result<usize, Error> {
         buff.write_u16::<BigEndian>(self.start_pc)?;
         buff.write_u16::<BigEndian>(self.end_pc)?;
         buff.write_u16::<BigEndian>(self.handler_pc)?;
         buff.write_u16::<BigEndian>(self.catch_type)?;
-        Ok(())
+        Ok(size_of::<u16>() + size_of::<u16>() + size_of::<u16>() + size_of::<u16>())
     }
 }
 
 ///```javadoc
-/// {   type_alias::u2 start_pc;
-///     type_alias::u2 length;
-///     type_alias::u2 name_index;
-///     type_alias::u2 descriptor_index;
-///     type_alias::u2 index;
-/// } local_variable_table[local_variable_table_length];
+/// {   u2 start_pc;
+///     u2 line_number;
+/// } line_number_table[line_number_table_length];
 ///```
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 pub struct LineNumberEntry {
     pub start_pc: type_alias::u2,
     pub line_number: type_alias::u2,
 }
 
 impl LineNumberEntry {
-    pub fn write(self, buff: &mut Vec<u8>) -> Result<(), Error> {
+    pub fn write<B: Write>(self, buff: &mut B) -> Result<usize, Error> {
         buff.write_u16::<BigEndian>(self.start_pc)?;
         buff.write_u16::<BigEndian>(self.line_number)?;
-        Ok(())
+        Ok(size_of::<u16>() + size_of::<u16>())
     }
 }
 
@@ -60,7 +59,7 @@ impl LineNumberEntry {
 ///     type_alias::u2 index;
 /// } local_variable_table[local_variable_table_length];
 ///```
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 pub struct LocalVariableTableEntry {
     pub start_pc: type_alias::u2,
     pub length: type_alias::u2,
@@ -70,13 +69,13 @@ pub struct LocalVariableTableEntry {
 }
 
 impl LocalVariableTableEntry {
-    pub fn write(self, buff: &mut Vec<u8>) -> Result<(), Error> {
+    pub fn write<B: Write>(self, buff: &mut B) -> Result<usize, Error> {
         buff.write_u16::<BigEndian>(self.start_pc)?;
         buff.write_u16::<BigEndian>(self.length)?;
         buff.write_u16::<BigEndian>(self.name_index)?;
         buff.write_u16::<BigEndian>(self.descriptor_index)?;
         buff.write_u16::<BigEndian>(self.index)?;
-        Ok(())
+        Ok(size_of::<u16>() + size_of::<u16>() + size_of::<u16>() + size_of::<u16>() + size_of::<u16>())
     }
 }
 
@@ -88,7 +87,7 @@ impl LocalVariableTableEntry {
 ///     type_alias::u2 index;
 /// } local_variable_type_table[local_variable_type_table_length];
 /// ```
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 pub struct LocalVariableTypeTableEntry {
     pub start_pc: type_alias::u2,
     pub length: type_alias::u2,
@@ -98,13 +97,13 @@ pub struct LocalVariableTypeTableEntry {
 }
 
 impl LocalVariableTypeTableEntry {
-    pub fn write(self, buff: &mut Vec<u8>) -> Result<(), Error> {
+    pub fn write<B: Write>(self, buff: &mut B) -> Result<usize, Error> {
         buff.write_u16::<BigEndian>(self.start_pc)?;
         buff.write_u16::<BigEndian>(self.length)?;
         buff.write_u16::<BigEndian>(self.name_index)?;
         buff.write_u16::<BigEndian>(self.signature_index)?;
         buff.write_u16::<BigEndian>(self.index)?;
-        Ok(())
+        Ok(size_of::<u16>() + size_of::<u16>() + size_of::<u16>() + size_of::<u16>() + size_of::<u16>())
     }
 }
 
@@ -122,18 +121,12 @@ pub struct BootstrapMethodEntry {
 }
 
 impl BootstrapMethodEntry {
-    pub unsafe fn write(self, buff: &mut Vec<u8>) -> Result<(), Error> {
+    pub fn write<B: Write>(self, buff: &mut B) -> Result<usize, Error> {
         buff.write_u16::<BigEndian>(self.bootstrap_method_ref)?;
         buff.write_u16::<BigEndian>(self.num_bootstrap_arguments)?;
-        buff.write(
-            self.bootstrap_arguments
-                .iter()
-                .map(|e| e.to_be())
-                .collect::<Vec<type_alias::u2>>()
-                .align_to::<u8>()
-                .1,
-        )?;
-        Ok(())
+        let mut bytes_written = size_of::<u16>() + size_of::<u16>();
+        bytes_written += write_vec_u16_as_bytes(&self.bootstrap_arguments, buff)?;
+        Ok(bytes_written)
     }
 }
 
@@ -144,7 +137,7 @@ impl BootstrapMethodEntry {
 ///     type_alias::u2 inner_class_access_flags;
 /// } classes[number_of_classes];
 /// ```
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 pub struct InnerClassEntry {
     pub inner_class_info_index: type_alias::u2,
     pub outer_class_info_index: type_alias::u2,
@@ -153,12 +146,12 @@ pub struct InnerClassEntry {
 }
 
 impl InnerClassEntry {
-    pub fn write(self, buff: &mut Vec<u8>) -> Result<(), Error> {
+    pub fn write<B: Write>(self, buff: &mut B) -> Result<usize, Error> {
         buff.write_u16::<BigEndian>(self.inner_class_info_index)?;
         buff.write_u16::<BigEndian>(self.outer_class_info_index)?;
         buff.write_u16::<BigEndian>(self.inner_name_index)?;
         buff.write_u16::<BigEndian>(self.inner_class_access_flags)?;
-        Ok(())
+        Ok(size_of::<u16>() + size_of::<u16>() + size_of::<u16>() + size_of::<u16>())
     }
 }
 
@@ -179,14 +172,15 @@ pub struct RecordComponentInfo {
 }
 
 impl RecordComponentInfo {
-    pub fn write(self, buff: &mut Vec<u8>) -> Result<(), Error> {
+    pub fn write<B: Write>(self, buff: &mut B) -> Result<usize, Error> {
         buff.write_u16::<BigEndian>(self.name_index)?;
         buff.write_u16::<BigEndian>(self.descriptor_index)?;
         buff.write_u16::<BigEndian>(self.attributes_count)?;
+        let mut bytes_written = size_of::<u16>() + size_of::<u16>() + size_of::<u16>();
         for attr in self.attributes {
-            attr.write(buff)?;
+            bytes_written += attr.write(buff)?;
         }
-        Ok(())
+        Ok(bytes_written)
     }
 }
 
@@ -207,13 +201,14 @@ pub struct Annotation {
 }
 
 impl Annotation {
-    pub fn write(self, buff: &mut Vec<u8>) -> Result<(), Error> {
+    pub fn write<B: Write>(self, buff: &mut B) -> Result<usize, Error> {
         buff.write_u16::<BigEndian>(self.type_index)?;
         buff.write_u16::<BigEndian>(self.num_element_value_pairs)?;
+        let mut bytes_written = size_of::<u16>() + size_of::<u16>();
         for one_pair in self.element_value_pairs {
-            one_pair.write(buff)?
+            bytes_written += one_pair.write(buff)?;
         }
-        Ok(())
+        Ok(bytes_written)
     }
 }
 
@@ -229,10 +224,12 @@ pub struct ElementValuePair {
 }
 
 impl ElementValuePair {
-    pub fn write(self, buff: &mut Vec<u8>) -> Result<(), Error> {
+    pub fn write<B: Write>(self, buff: &mut B) -> Result<usize, Error> {
+        let mut bytes_written = 0;
         buff.write_u16::<BigEndian>(self.element_name_index)?;
-        self.value.write(buff)?;
-        Ok(())
+        bytes_written += size_of::<u16>();
+        bytes_written += self.value.write(buff)?;
+        Ok(bytes_written)
     }
 }
 
@@ -263,11 +260,13 @@ pub struct ElementValue {
 }
 
 impl ElementValue {
-    pub fn write(self, buff: &mut Vec<u8>) -> Result<(), Error> {
+    pub fn write<B: Write>(self, buff: &mut B) -> Result<usize, Error> {
+        let mut bytes_written = 0;
         buff.write_u8(self.tag)?;
-        self.value.write(buff)?;
+        bytes_written += size_of::<u8>();
+        bytes_written += self.value.write(buff)?;
 
-        Ok(())
+        Ok(bytes_written)
     }
 }
 
@@ -288,21 +287,21 @@ impl ElementValue {
 ///     } array_value;
 /// } value;
 ///```
-/// | tag Item  | Type	                | value Item            | Constant Type     |
+/// | tag Item  | Type                  | value Item            | Constant Type     |
 /// |-----------|-----------------------|-----------------------|-------------------|
-/// | B	        | byte	                | const_value_index     | CONSTANT_Integer  |
-/// | C	        | char	                | const_value_index     | CONSTANT_Integer  |
-/// | D	        | double	            | const_value_index     | CONSTANT_Double   |
-/// | F	        | float	                | const_value_index     | CONSTANT_Float    |
-/// | I	        | int	                | const_value_index     | CONSTANT_Integer  |
-/// | J	        | long	                | const_value_index     | CONSTANT_Long     |
-/// | S	        | short	                | const_value_index     | CONSTANT_Integer  |
-/// | Z	        | boolean	            | const_value_index     | CONSTANT_Integer  |
-/// | s	        | String	            | const_value_index     | CONSTANT_Utf8     |
-/// | e	        | Enum class  	        | enum_const_value      | Not applicable    |
-/// | c	        | Class	                | class_info_index      | Not applicable    |
-/// | @	        | Annotation interface	| annotation_value      | Not applicable    |
-/// | [	        | Array type  	        | array_value           | Not applicable    |
+/// | B         | byte                  | const_value_index     | CONSTANT_Integer  |
+/// | C         | char                  | const_value_index     | CONSTANT_Integer  |
+/// | D         | double                | const_value_index     | CONSTANT_Double   |
+/// | F         | float                 | const_value_index     | CONSTANT_Float    |
+/// | I         | int                   | const_value_index     | CONSTANT_Integer  |
+/// | J         | long                  | const_value_index     | CONSTANT_Long     |
+/// | S         | short                 | const_value_index     | CONSTANT_Integer  |
+/// | Z         | boolean               | const_value_index     | CONSTANT_Integer  |
+/// | s         | String                | const_value_index     | CONSTANT_Utf8     |
+/// | e         | Enum class            | enum_const_value      | Not applicable    |
+/// | c         | Class                 | class_info_index      | Not applicable    |
+/// | @         | Annotation interface  | annotation_value      | Not applicable    |
+/// | [         | Array type            | array_value           | Not applicable    |
 #[derive(Clone, Debug)]
 pub enum Value {
     ConstValueIndex {
@@ -325,10 +324,11 @@ pub enum Value {
 }
 
 impl Value {
-    pub fn write(self, buff: &mut Vec<u8>) -> Result<(), Error> {
+    pub fn write<B: Write>(self, buff: &mut B) -> Result<usize, Error> {
         match self {
             Value::ConstValueIndex { const_value_index } => {
                 buff.write_u16::<BigEndian>(const_value_index)?;
+                Ok(size_of::<u16>())
             }
             Value::EnumConstValue {
                 type_name_index,
@@ -336,29 +336,29 @@ impl Value {
             } => {
                 buff.write_u16::<BigEndian>(type_name_index)?;
                 buff.write_u16::<BigEndian>(const_name_index)?;
+                Ok(size_of::<u16>() + size_of::<u16>())
             }
             Value::ClassInfoIndex { class_info_index } => {
                 buff.write_u16::<BigEndian>(class_info_index)?;
+                Ok(size_of::<u16>())
             }
-            Value::AnnotationValue { annotation_value } => annotation_value.write(buff)?,
+            Value::AnnotationValue { annotation_value } => Ok(annotation_value.write(buff)?),
             Value::ArrayValue { num_values, values } => {
                 buff.write_u16::<BigEndian>(num_values)?;
+                let mut bytes_written = size_of::<u16>();
                 for one_value in values {
-                    one_value.write(buff)?
+                    bytes_written += one_value.write(buff)?;
                 }
+                Ok(bytes_written)
             }
         }
-        Ok(())
     }
 }
 
 ///```javadoc
-/// {   type_alias::u2 start_pc;
-///     type_alias::u2 length;
-///     type_alias::u2 name_index;
-///     type_alias::u2 descriptor_index;
-///     type_alias::u2 index;
-/// } local_variable_table[local_variable_table_length];
+/// {   u2 name_index;
+///     u2 access_flags;
+/// } parameters[parameters_count];
 ///```
 #[derive(Copy, Clone, Debug)]
 pub struct Parameter {
@@ -367,20 +367,25 @@ pub struct Parameter {
 }
 
 impl Parameter {
-    pub fn write(self, buff: &mut Vec<u8>) -> Result<(), Error> {
+    pub fn write<B: Write>(self, buff: &mut B) -> Result<usize, Error> {
         buff.write_u16::<BigEndian>(self.name_index)?;
         buff.write_u16::<BigEndian>(self.access_flags.into())?;
-        Ok(())
+        Ok(size_of::<u16>() + size_of::<u16>())
     }
 }
 
 ///```javadoc
-/// {   type_alias::u2 start_pc;
-///     type_alias::u2 length;
-///     type_alias::u2 name_index;
-///     type_alias::u2 descriptor_index;
-///     type_alias::u2 index;
-/// } local_variable_table[local_variable_table_length];
+/// union verification_type_info {
+///     Top_variable_info;
+///     Integer_variable_info;
+///     Float_variable_info;
+///     Long_variable_info;
+///     Double_variable_info;
+///     Null_variable_info;
+///     UninitializedThis_variable_info;
+///     Object_variable_info;
+///     Uninitialized_variable_info;
+/// }
 ///```
 #[derive(Copy, Clone, Debug)]
 pub enum VerificationTypeInfoItem {
@@ -410,12 +415,13 @@ pub struct ParameterAnnotation {
 }
 
 impl ParameterAnnotation {
-    pub fn write(self, buff: &mut Vec<u8>) -> Result<(), Error> {
+    pub fn write<B: Write>(self, buff: &mut B) -> Result<usize, Error> {
         buff.write_u16::<BigEndian>(self.num_annotations)?;
+        let mut bytes_written = size_of::<u16>();
         for one_ann in self.annotations {
-            one_ann.write(buff)?
+            bytes_written += one_ann.write(buff)?
         }
-        Ok(())
+        Ok(bytes_written)
     }
 }
 
@@ -438,16 +444,20 @@ pub struct TypeAnnotation {
 }
 
 impl TypeAnnotation {
-    pub fn write(self, buff: &mut Vec<u8>) -> Result<(), Error> {
+    pub fn write<B: Write>(self, buff: &mut B) -> Result<usize, Error> {
+        let mut bytes_written = 0;
         buff.write_u8(self.target_type)?;
-        self.target_info.write(buff)?;
-        self.target_path.write(buff)?;
+        bytes_written += size_of::<u8>();
+        bytes_written += self.target_info.write(buff)?;
+        bytes_written += self.target_path.write(buff)?;
         buff.write_u16::<BigEndian>(self.type_index)?;
+        bytes_written += size_of::<u16>();
         buff.write_u16::<BigEndian>(self.num_element_value_pairs)?;
+        bytes_written += size_of::<u16>();
         for entry in self.element_value_pairs {
-            entry.write(buff)?;
+            bytes_written += entry.write(buff)?;
         }
-        Ok(())
+        Ok(bytes_written)
     }
 }
 
@@ -459,17 +469,17 @@ impl TypeAnnotation {
 ///     type_alias::u2 index;
 /// } local_variable_table[local_variable_table_length];
 ///```
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 pub struct PathEntry {
     pub type_path_kind: type_alias::u1,
     pub type_argument_index: type_alias::u1,
 }
 
 impl PathEntry {
-    pub fn write(self, buff: &mut Vec<u8>) -> Result<(), Error> {
+    pub fn write<B: Write>(self, buff: &mut B) -> Result<usize, Error> {
         buff.write_u8(self.type_path_kind)?;
         buff.write_u8(self.type_argument_index)?;
-        Ok(())
+        Ok(size_of::<u8>() + size_of::<u8>())
     }
 }
 
@@ -488,12 +498,14 @@ pub struct TypePath {
 }
 
 impl TypePath {
-    pub fn write(self, buff: &mut Vec<u8>) -> Result<(), Error> {
+    pub fn write<B: Write>(self, buff: &mut B) -> Result<usize, Error> {
+        let mut bytes_written = 0;
         buff.write_u8(self.path_length)?;
+        bytes_written += size_of::<u8>();
         for one_path in self.path {
-            one_path.write(buff)?;
+            bytes_written += one_path.write(buff)?;
         }
-        Ok(())
+        Ok(bytes_written)
     }
 }
 
@@ -541,13 +553,15 @@ pub enum TargetInfo {
 }
 
 impl TargetInfo {
-    pub fn write(self, buff: &mut Vec<u8>) -> Result<(), Error> {
+    pub fn write<B: Write>(self, buff: &mut B) -> Result<usize, Error> {
         match self {
-            TargetInfo::TypeParameterTarget {
-                type_parameter_index,
-            } => buff.write_u8(type_parameter_index)?,
+            TargetInfo::TypeParameterTarget { type_parameter_index } => {
+                buff.write_u8(type_parameter_index)?;
+                Ok(size_of::<u8>())
+            }
             TargetInfo::SupertypeTarget { supertype_index } => {
-                buff.write_u16::<BigEndian>(supertype_index)?
+                buff.write_u16::<BigEndian>(supertype_index)?;
+                Ok(size_of::<u16>())
             }
             TargetInfo::TypeParameterBoundTarget {
                 type_parameter_index,
@@ -555,36 +569,43 @@ impl TargetInfo {
             } => {
                 buff.write_u8(type_parameter_index)?;
                 buff.write_u8(bound_index)?;
+                Ok(size_of::<u8>() + size_of::<u8>())
             }
-            TargetInfo::EmptyTarget {} => {}
-            TargetInfo::FormalParameterTarget {
-                formal_parameter_index,
-            } => buff.write_u8(formal_parameter_index)?,
+            TargetInfo::EmptyTarget {} => Ok(0),
+            TargetInfo::FormalParameterTarget { formal_parameter_index } => {
+                buff.write_u8(formal_parameter_index)?;
+                Ok(size_of::<u8>())
+            }
             TargetInfo::ThrowsTarget { throws_type_index } => {
-                buff.write_u16::<BigEndian>(throws_type_index)?
+                buff.write_u16::<BigEndian>(throws_type_index)?;
+                Ok(size_of::<u16>())
             }
-            TargetInfo::LocalvarTarget {
-                table_length,
-                table,
-            } => {
+            TargetInfo::LocalvarTarget { table_length, table } => {
+                let mut bytes_written = 0;
                 buff.write_u16::<BigEndian>(table_length)?;
+                bytes_written += size_of::<u16>();
                 for entry in table {
-                    entry.write(buff)?;
+                    bytes_written += entry.write(buff)?;
                 }
+                Ok(bytes_written)
             }
-            TargetInfo::CatchTarget {
-                exception_table_index,
-            } => buff.write_u16::<BigEndian>(exception_table_index)?,
-            TargetInfo::OffsetTarget { offset } => buff.write_u16::<BigEndian>(offset)?,
+            TargetInfo::CatchTarget { exception_table_index } => {
+                buff.write_u16::<BigEndian>(exception_table_index)?;
+                Ok(size_of::<u16>())
+            }
+            TargetInfo::OffsetTarget { offset } => {
+                buff.write_u16::<BigEndian>(offset)?;
+                Ok(size_of::<u16>())
+            }
             TargetInfo::TypeArgumentTarget {
                 offset,
                 type_argument_index,
             } => {
                 buff.write_u16::<BigEndian>(offset)?;
                 buff.write_u8(type_argument_index)?;
+                Ok(size_of::<u16>() + size_of::<u8>())
             }
         }
-        Ok(())
     }
 }
 
@@ -596,7 +617,7 @@ impl TargetInfo {
 ///     type_alias::u2 index;
 /// } local_variable_table[local_variable_table_length];
 ///```
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 pub struct LocalvarTargetTableEntry {
     pub start_pc: type_alias::u2,
     pub length: type_alias::u2,
@@ -604,11 +625,11 @@ pub struct LocalvarTargetTableEntry {
 }
 
 impl LocalvarTargetTableEntry {
-    pub fn write(self, buff: &mut Vec<u8>) -> Result<(), Error> {
+    pub fn write<B: Write>(self, buff: &mut B) -> Result<usize, Error> {
         buff.write_u16::<BigEndian>(self.start_pc)?;
         buff.write_u16::<BigEndian>(self.length)?;
         buff.write_u16::<BigEndian>(self.index)?;
-        Ok(())
+        Ok(size_of::<u16>() + size_of::<u16>() + size_of::<u16>())
     }
 }
 
@@ -651,7 +672,7 @@ impl LocalvarTargetTableEntry {
 ///     } provides[provides_count];
 /// }
 ///```
-
+///
 ///```javadoc
 /// {   type_alias::u2 start_pc;
 ///     type_alias::u2 length;
@@ -660,7 +681,7 @@ impl LocalvarTargetTableEntry {
 ///     type_alias::u2 index;
 /// } local_variable_table[local_variable_table_length];
 ///```
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 pub struct RequiresEntry {
     pub requires_index: type_alias::u2,
     pub requires_flags: type_alias::u2,
@@ -668,11 +689,11 @@ pub struct RequiresEntry {
 }
 
 impl RequiresEntry {
-    pub fn write(self, buff: &mut Vec<u8>) -> Result<(), Error> {
+    pub fn write<B: Write>(self, buff: &mut B) -> Result<usize, Error> {
         buff.write_u16::<BigEndian>(self.requires_index)?;
         buff.write_u16::<BigEndian>(self.requires_flags)?;
         buff.write_u16::<BigEndian>(self.requires_version_index)?;
-        Ok(())
+        Ok(size_of::<u16>() + size_of::<u16>() + size_of::<u16>())
     }
 }
 
@@ -684,7 +705,7 @@ impl RequiresEntry {
 ///     type_alias::u2 index;
 /// } local_variable_table[local_variable_table_length];
 ///```
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 pub struct ExportsEntry {
     pub exports_index: type_alias::u2,
     pub exports_flags: type_alias::u2,
@@ -692,11 +713,11 @@ pub struct ExportsEntry {
 }
 
 impl ExportsEntry {
-    pub fn write(self, buff: &mut Vec<u8>) -> Result<(), Error> {
+    pub fn write<B: Write>(self, buff: &mut B) -> Result<usize, Error> {
         buff.write_u16::<BigEndian>(self.exports_index)?;
         buff.write_u16::<BigEndian>(self.exports_flags)?;
         buff.write_u16::<BigEndian>(self.exports_to_count)?;
-        Ok(())
+        Ok(size_of::<u16>() + size_of::<u16>() + size_of::<u16>())
     }
 }
 
@@ -708,7 +729,7 @@ impl ExportsEntry {
 ///     type_alias::u2 index;
 /// } local_variable_table[local_variable_table_length];
 ///```
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 pub struct OpensEntry {
     pub opens_index: type_alias::u2,
     pub opens_flags: type_alias::u2,
@@ -716,11 +737,11 @@ pub struct OpensEntry {
 }
 
 impl OpensEntry {
-    pub fn write(self, buff: &mut Vec<u8>) -> Result<(), Error> {
+    pub fn write<B: Write>(self, buff: &mut B) -> Result<usize, Error> {
         buff.write_u16::<BigEndian>(self.opens_index)?;
         buff.write_u16::<BigEndian>(self.opens_flags)?;
         buff.write_u16::<BigEndian>(self.opens_to_count)?;
-        Ok(())
+        Ok(size_of::<u16>() + size_of::<u16>() + size_of::<u16>())
     }
 }
 
@@ -732,21 +753,21 @@ impl OpensEntry {
 ///     type_alias::u2 index;
 /// } local_variable_table[local_variable_table_length];
 ///```
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 pub struct ProvidesEntry {
     pub provides_index: type_alias::u2,
     pub provides_with_count: type_alias::u2,
 }
 
 impl ProvidesEntry {
-    pub fn write(self, buff: &mut Vec<u8>) -> Result<(), Error> {
+    pub fn write<B: Write>(self, buff: &mut B) -> Result<usize, Error> {
         buff.write_u16::<BigEndian>(self.provides_index)?;
         buff.write_u16::<BigEndian>(self.provides_with_count)?;
-        Ok(())
+        Ok(size_of::<u16>() + size_of::<u16>())
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 pub enum VerificationTypeInfo {
     TopVariableInfo {
         tag: VerificationTypeInfoItem, /* 0 */
@@ -780,27 +801,47 @@ pub enum VerificationTypeInfo {
 }
 
 impl VerificationTypeInfo {
-    pub fn write(self, buff: &mut Vec<u8>) -> Result<(), Error> {
+    pub fn write<B: Write>(self, buff: &mut B) -> Result<usize, Error> {
         match self {
-            VerificationTypeInfo::TopVariableInfo { tag } => buff.write_u8(tag as u8)?,
-            VerificationTypeInfo::IntegerVariableInfo { tag } => buff.write_u8(tag as u8)?,
-            VerificationTypeInfo::FloatVariableInfo { tag } => buff.write_u8(tag as u8)?,
-            VerificationTypeInfo::DoubleVariableInfo { tag } => buff.write_u8(tag as u8)?,
-            VerificationTypeInfo::LongVariableInfo { tag } => buff.write_u8(tag as u8)?,
-            VerificationTypeInfo::NullVariableInfo { tag } => buff.write_u8(tag as u8)?,
+            VerificationTypeInfo::TopVariableInfo { tag } => {
+                buff.write_u8(tag as u8)?;
+                Ok(size_of::<u8>())
+            }
+            VerificationTypeInfo::IntegerVariableInfo { tag } => {
+                buff.write_u8(tag as u8)?;
+                Ok(size_of::<u8>())
+            }
+            VerificationTypeInfo::FloatVariableInfo { tag } => {
+                buff.write_u8(tag as u8)?;
+                Ok(size_of::<u8>())
+            }
+            VerificationTypeInfo::DoubleVariableInfo { tag } => {
+                buff.write_u8(tag as u8)?;
+                Ok(size_of::<u8>())
+            }
+            VerificationTypeInfo::LongVariableInfo { tag } => {
+                buff.write_u8(tag as u8)?;
+                Ok(size_of::<u8>())
+            }
+            VerificationTypeInfo::NullVariableInfo { tag } => {
+                buff.write_u8(tag as u8)?;
+                Ok(size_of::<u8>())
+            }
             VerificationTypeInfo::UninitializedThisVariableInfo { tag } => {
-                buff.write_u8(tag as u8)?
+                buff.write_u8(tag as u8)?;
+                Ok(size_of::<u8>())
             }
             VerificationTypeInfo::ObjectVariableInfo { tag, cpool_index } => {
                 buff.write_u8(tag as u8)?;
                 buff.write_u16::<BigEndian>(cpool_index)?;
+                Ok(size_of::<u8>() + size_of::<u16>())
             }
             VerificationTypeInfo::UninitializedVariableInfo { tag, offset } => {
                 buff.write_u8(tag as u8)?;
                 buff.write_u16::<BigEndian>(offset)?;
+                Ok(size_of::<u8>() + size_of::<u16>())
             }
         }
-        Ok(())
     }
 }
 
@@ -854,13 +895,9 @@ where
         let tag = VerificationTypeInfoItem::try_from(buff.read_u8()?)?;
         Ok(match tag {
             VerificationTypeInfoItem::ItemTop => VerificationTypeInfo::TopVariableInfo { tag },
-            VerificationTypeInfoItem::ItemInteger => {
-                VerificationTypeInfo::IntegerVariableInfo { tag }
-            }
+            VerificationTypeInfoItem::ItemInteger => VerificationTypeInfo::IntegerVariableInfo { tag },
             VerificationTypeInfoItem::ItemFloat => VerificationTypeInfo::FloatVariableInfo { tag },
-            VerificationTypeInfoItem::ItemDouble => {
-                VerificationTypeInfo::DoubleVariableInfo { tag }
-            }
+            VerificationTypeInfoItem::ItemDouble => VerificationTypeInfo::DoubleVariableInfo { tag },
             VerificationTypeInfoItem::ItemLong => VerificationTypeInfo::LongVariableInfo { tag },
             VerificationTypeInfoItem::ItemNull => VerificationTypeInfo::NullVariableInfo { tag },
             VerificationTypeInfoItem::ItemUninitializedThis => {
@@ -870,12 +907,10 @@ where
                 tag,
                 cpool_index: buff.read_u16::<BigEndian>()?,
             },
-            VerificationTypeInfoItem::ItemUninitialized => {
-                VerificationTypeInfo::UninitializedVariableInfo {
-                    tag,
-                    offset: buff.read_u16::<BigEndian>()?,
-                }
-            }
+            VerificationTypeInfoItem::ItemUninitialized => VerificationTypeInfo::UninitializedVariableInfo {
+                tag,
+                offset: buff.read_u16::<BigEndian>()?,
+            },
         })
     }
 }
@@ -924,16 +959,19 @@ pub enum StackMapFrame {
 }
 
 impl StackMapFrame {
-    pub fn write(self, buff: &mut Vec<u8>) -> Result<(), Error> {
+    pub fn write<B: Write>(self, buff: &mut B) -> Result<usize, Error> {
         match self {
             StackMapFrame::SameFrame { frame_type } => {
                 buff.write_u8(frame_type)?;
+                Ok(size_of::<u8>())
             }
             StackMapFrame::SameLocals1StackItemFrame { frame_type, stack } => {
                 buff.write_u8(frame_type)?;
+                let mut bytes_written = size_of::<u8>();
                 for entry in stack {
-                    entry.write(buff)?;
+                    bytes_written += entry.write(buff)?;
                 }
+                Ok(bytes_written)
             }
             StackMapFrame::SameLocals1StackItemFrameExtended {
                 frame_type,
@@ -942,9 +980,11 @@ impl StackMapFrame {
             } => {
                 buff.write_u8(frame_type)?;
                 buff.write_u16::<BigEndian>(offset_delta)?;
+                let mut bytes_written = size_of::<u8>() + size_of::<u16>();
                 for entry in stack {
-                    entry.write(buff)?;
+                    bytes_written += entry.write(buff)?;
                 }
+                Ok(bytes_written)
             }
             StackMapFrame::ChopFrame {
                 frame_type,
@@ -952,6 +992,7 @@ impl StackMapFrame {
             } => {
                 buff.write_u8(frame_type)?;
                 buff.write_u16::<BigEndian>(offset_delta)?;
+                Ok(size_of::<u8>() + size_of::<u16>())
             }
             StackMapFrame::SameFrameExtended {
                 frame_type,
@@ -959,6 +1000,7 @@ impl StackMapFrame {
             } => {
                 buff.write_u8(frame_type)?;
                 buff.write_u16::<BigEndian>(offset_delta)?;
+                Ok(size_of::<u8>() + size_of::<u16>())
             }
             StackMapFrame::AppendFrame {
                 frame_type,
@@ -967,9 +1009,12 @@ impl StackMapFrame {
             } => {
                 buff.write_u8(frame_type)?;
                 buff.write_u16::<BigEndian>(offset_delta)?;
+                let mut bytes_written = size_of::<u8>() + size_of::<u16>();
+
                 for one_local in locals {
-                    one_local.write(buff)?;
+                    bytes_written += one_local.write(buff)?;
                 }
+                Ok(bytes_written)
             }
             StackMapFrame::FullFrame {
                 frame_type,
@@ -982,20 +1027,207 @@ impl StackMapFrame {
                 buff.write_u8(frame_type)?;
                 buff.write_u16::<BigEndian>(offset_delta)?;
                 buff.write_u16::<BigEndian>(number_of_locals)?;
+                let mut bytes_written = size_of::<u8>() + size_of::<u16>() + size_of::<u16>();
+
                 for one_local in locals {
-                    one_local.write(buff)?;
+                    bytes_written += one_local.write(buff)?;
                 }
+
                 buff.write_u16::<BigEndian>(number_of_stack_items)?;
+                bytes_written += size_of::<u16>();
+
                 for one_stack in stack {
-                    one_stack.write(buff)?;
+                    bytes_written += one_stack.write(buff)?;
                 }
+
+                Ok(bytes_written)
+            }
+        }
+    }
+}
+
+impl Debug for Attribute {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!("{}", self))?;
+        Ok(())
+    }
+}
+
+impl Display for Attribute {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Attribute::Code { code, .. } => {
+                let mut code_iter = code.iter();
+                while let Some(&opcode_byte) = code_iter.next() {
+                    if let Some(opcode) = OPCODES_MAP[opcode_byte as usize] {
+                        let mut opcode_line = String::new();
+                        opcode_line.push_str(opcode.opname);
+                        for _ in 0..(opcode.oplen - 1) {
+                            if let Some(opcode_param) = code_iter.next() {
+                                opcode_line.push_str(format!(" {}", opcode_param).as_str());
+                            }
+                        }
+                        opcode_line.push('\n');
+                        f.write_str(opcode_line.as_str())?;
+                    }
+                }
+            }
+            Attribute::ConstantValue {
+                attribute_name_index, ..
+            } => {
+                f.write_fmt(format_args!("{}", attribute_name_index))?;
+            }
+            Attribute::StackMapTable {
+                attribute_name_index, ..
+            } => {
+                f.write_fmt(format_args!("{}", attribute_name_index))?;
+            }
+            Attribute::Exceptions {
+                attribute_name_index, ..
+            } => {
+                f.write_fmt(format_args!("{}", attribute_name_index))?;
+            }
+            Attribute::InnerClasses {
+                attribute_name_index, ..
+            } => {
+                f.write_fmt(format_args!("{}", attribute_name_index))?;
+            }
+            Attribute::EnclosingMethod {
+                attribute_name_index, ..
+            } => {
+                f.write_fmt(format_args!("{}", attribute_name_index))?;
+            }
+            Attribute::Synthetic {
+                attribute_name_index, ..
+            } => {
+                f.write_fmt(format_args!("{}", attribute_name_index))?;
+            }
+            Attribute::Signature {
+                attribute_name_index, ..
+            } => {
+                f.write_fmt(format_args!("{}", attribute_name_index))?;
+            }
+            Attribute::SourceFile {
+                attribute_name_index, ..
+            } => {
+                f.write_fmt(format_args!("{}", attribute_name_index))?;
+            }
+            Attribute::SourceDebugExtension {
+                attribute_name_index, ..
+            } => {
+                f.write_fmt(format_args!("{}", attribute_name_index))?;
+            }
+            Attribute::LineNumberTable {
+                attribute_name_index, ..
+            } => {
+                f.write_fmt(format_args!("{}", attribute_name_index))?;
+            }
+            Attribute::LocalVariableTable {
+                attribute_name_index, ..
+            } => {
+                f.write_fmt(format_args!("{}", attribute_name_index))?;
+            }
+            Attribute::LocalVariableTypeTable {
+                attribute_name_index, ..
+            } => {
+                f.write_fmt(format_args!("{}", attribute_name_index))?;
+            }
+            Attribute::Deprecated {
+                attribute_name_index, ..
+            } => {
+                f.write_fmt(format_args!("{}", attribute_name_index))?;
+            }
+            Attribute::RuntimeVisibleAnnotations {
+                attribute_name_index, ..
+            } => {
+                f.write_fmt(format_args!("{}", attribute_name_index))?;
+            }
+            Attribute::RuntimeInvisibleAnnotations {
+                attribute_name_index, ..
+            } => {
+                f.write_fmt(format_args!("{}", attribute_name_index))?;
+            }
+            Attribute::RuntimeVisibleParameterAnnotations {
+                attribute_name_index, ..
+            } => {
+                f.write_fmt(format_args!("{}", attribute_name_index))?;
+            }
+            Attribute::RuntimeInvisibleParameterAnnotations {
+                attribute_name_index, ..
+            } => {
+                f.write_fmt(format_args!("{}", attribute_name_index))?;
+            }
+            Attribute::RuntimeVisibleTypeAnnotations {
+                attribute_name_index, ..
+            } => {
+                f.write_fmt(format_args!("{}", attribute_name_index))?;
+            }
+            Attribute::RuntimeInvisibleTypeAnnotations {
+                attribute_name_index, ..
+            } => {
+                f.write_fmt(format_args!("{}", attribute_name_index))?;
+            }
+            Attribute::AnnotationDefault {
+                attribute_name_index, ..
+            } => {
+                f.write_fmt(format_args!("{}", attribute_name_index))?;
+            }
+            Attribute::BootstrapMethods {
+                attribute_name_index, ..
+            } => {
+                f.write_fmt(format_args!("{}", attribute_name_index))?;
+            }
+            Attribute::MethodParameters {
+                attribute_name_index, ..
+            } => {
+                f.write_fmt(format_args!("{}", attribute_name_index))?;
+            }
+            Attribute::Module {
+                attribute_name_index, ..
+            } => {
+                f.write_fmt(format_args!("{}", attribute_name_index))?;
+            }
+            Attribute::ModulePackages {
+                attribute_name_index, ..
+            } => {
+                f.write_fmt(format_args!("{}", attribute_name_index))?;
+            }
+            Attribute::ModuleMainClass {
+                attribute_name_index, ..
+            } => {
+                f.write_fmt(format_args!("{}", attribute_name_index))?;
+            }
+            Attribute::NestHost {
+                attribute_name_index, ..
+            } => {
+                f.write_fmt(format_args!("{}", attribute_name_index))?;
+            }
+            Attribute::NestMembers {
+                attribute_name_index, ..
+            } => {
+                f.write_fmt(format_args!("{}", attribute_name_index))?;
+            }
+            Attribute::Record {
+                attribute_name_index, ..
+            } => {
+                f.write_fmt(format_args!("{}", attribute_name_index))?;
+            }
+            Attribute::PermittedSubclasses {
+                attribute_name_index, ..
+            } => {
+                f.write_fmt(format_args!("{}", attribute_name_index))?;
+            }
+            Attribute::ExternalAttribute {
+                attribute_name_index, ..
+            } => {
+                f.write_fmt(format_args!("{}", attribute_name_index))?;
             }
         }
         Ok(())
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub enum Attribute {
     /// Oracle docs: https://docs.oracle.com/javase/specs/jvms/se22/html/jvms-4.html#jvms-4.7.2
     ConstantValue {
@@ -1222,7 +1454,7 @@ pub enum Attribute {
 }
 
 impl Attribute {
-    pub fn write(self, buff: &mut Vec<u8>) -> Result<(), Error> {
+    pub fn write<B: Write>(self, buff: &mut B) -> Result<usize, Error> {
         match self {
             Attribute::ConstantValue {
                 attribute_name_index,
@@ -1232,6 +1464,7 @@ impl Attribute {
                 buff.write_u16::<BigEndian>(attribute_name_index)?;
                 buff.write_u32::<BigEndian>(attribute_length)?;
                 buff.write_u16::<BigEndian>(constantvalue_index)?;
+                Ok(size_of::<u16>() + size_of::<u32>() + size_of::<u16>())
             }
             Attribute::Code {
                 attribute_name_index,
@@ -1250,15 +1483,23 @@ impl Attribute {
                 buff.write_u16::<BigEndian>(max_stack)?;
                 buff.write_u16::<BigEndian>(max_locals)?;
                 buff.write_u32::<BigEndian>(code_length)?;
-                buff.write(code.as_slice())?;
+                let mut bytes_written =
+                    size_of::<u16>() + size_of::<u32>() + size_of::<u16>() + size_of::<u16>() + size_of::<u32>();
+
+                bytes_written += buff.write(code.as_slice())?;
+
                 buff.write_u16::<BigEndian>(exception_table_length)?;
+                bytes_written += size_of::<u16>();
                 for entry in exception_table {
-                    entry.write(buff)?
+                    bytes_written += entry.write(buff)?
                 }
+
                 buff.write_u16::<BigEndian>(attributes_count)?;
+                bytes_written += size_of::<u16>();
                 for attr in attributes {
-                    attr.write(buff)?
+                    bytes_written += attr.clone().write(buff)?
                 }
+                Ok(bytes_written)
             }
             Attribute::StackMapTable {
                 attribute_name_index,
@@ -1269,28 +1510,26 @@ impl Attribute {
                 buff.write_u16::<BigEndian>(attribute_name_index)?;
                 buff.write_u32::<BigEndian>(attribute_length)?;
                 buff.write_u16::<BigEndian>(number_of_entries)?;
+                let mut bytes_written = size_of::<u16>() + size_of::<u32>() + size_of::<u16>();
                 for frame in entries {
-                    frame.write(buff)?
+                    bytes_written += frame.write(buff)?
                 }
+                Ok(bytes_written)
             }
             Attribute::Exceptions {
                 attribute_name_index,
                 attribute_length,
                 number_of_exceptions,
-                exception_index_table,
-            } => unsafe {
+                ref exception_index_table,
+            } => {
                 buff.write_u16::<BigEndian>(attribute_name_index)?;
                 buff.write_u32::<BigEndian>(attribute_length)?;
                 buff.write_u16::<BigEndian>(number_of_exceptions)?;
-                buff.write(
-                    exception_index_table
-                        .iter()
-                        .map(|e| e.to_be())
-                        .collect::<Vec<type_alias::u2>>()
-                        .align_to::<u8>()
-                        .1,
-                )?;
-            },
+                let mut bytes_written = size_of::<u16>() + size_of::<u32>() + size_of::<u16>();
+
+                bytes_written += write_vec_u16_as_bytes(exception_index_table, buff)?;
+                Ok(bytes_written)
+            }
             Attribute::InnerClasses {
                 attribute_name_index,
                 attribute_length,
@@ -1300,9 +1539,11 @@ impl Attribute {
                 buff.write_u16::<BigEndian>(attribute_name_index)?;
                 buff.write_u32::<BigEndian>(attribute_length)?;
                 buff.write_u16::<BigEndian>(number_of_classes)?;
+                let mut bytes_written = size_of::<u16>() + size_of::<u32>() + size_of::<u16>();
                 for one_class in classes {
-                    one_class.write(buff)?
+                    bytes_written += one_class.write(buff)?
                 }
+                Ok(bytes_written)
             }
             Attribute::EnclosingMethod {
                 attribute_name_index,
@@ -1314,6 +1555,7 @@ impl Attribute {
                 buff.write_u32::<BigEndian>(attribute_length)?;
                 buff.write_u16::<BigEndian>(class_index)?;
                 buff.write_u16::<BigEndian>(method_index)?;
+                Ok(size_of::<u16>() + size_of::<u32>() + size_of::<u16>() + size_of::<u16>())
             }
             Attribute::Synthetic {
                 attribute_name_index,
@@ -1321,6 +1563,7 @@ impl Attribute {
             } => {
                 buff.write_u16::<BigEndian>(attribute_name_index)?;
                 buff.write_u32::<BigEndian>(attribute_length)?;
+                Ok(size_of::<u16>() + size_of::<u32>())
             }
             Attribute::Signature {
                 attribute_name_index,
@@ -1330,6 +1573,7 @@ impl Attribute {
                 buff.write_u16::<BigEndian>(attribute_name_index)?;
                 buff.write_u32::<BigEndian>(attribute_length)?;
                 buff.write_u16::<BigEndian>(signature_index)?;
+                Ok(size_of::<u16>() + size_of::<u32>() + size_of::<u16>())
             }
             Attribute::SourceFile {
                 attribute_name_index,
@@ -1339,6 +1583,7 @@ impl Attribute {
                 buff.write_u16::<BigEndian>(attribute_name_index)?;
                 buff.write_u32::<BigEndian>(attribute_length)?;
                 buff.write_u16::<BigEndian>(sourcefile_index)?;
+                Ok(size_of::<u16>() + size_of::<u32>() + size_of::<u16>())
             }
             Attribute::SourceDebugExtension {
                 attribute_name_index,
@@ -1347,7 +1592,9 @@ impl Attribute {
             } => {
                 buff.write_u16::<BigEndian>(attribute_name_index)?;
                 buff.write_u32::<BigEndian>(attribute_length)?;
-                buff.write(debug_extension.as_bytes())?;
+                let mut bytes_written = size_of::<u16>() + size_of::<u32>();
+                bytes_written += buff.write(debug_extension.as_bytes())?;
+                Ok(bytes_written)
             }
             Attribute::LineNumberTable {
                 attribute_name_index,
@@ -1358,9 +1605,11 @@ impl Attribute {
                 buff.write_u16::<BigEndian>(attribute_name_index)?;
                 buff.write_u32::<BigEndian>(attribute_length)?;
                 buff.write_u16::<BigEndian>(line_number_table_length)?;
+                let mut bytes_written = size_of::<u16>() + size_of::<u32>() + size_of::<u16>();
                 for entry in line_number_table {
-                    entry.write(buff)?
+                    bytes_written += entry.write(buff)?
                 }
+                Ok(bytes_written)
             }
             Attribute::LocalVariableTable {
                 attribute_name_index,
@@ -1371,9 +1620,11 @@ impl Attribute {
                 buff.write_u16::<BigEndian>(attribute_name_index)?;
                 buff.write_u32::<BigEndian>(attribute_length)?;
                 buff.write_u16::<BigEndian>(local_variable_table_length)?;
+                let mut bytes_written = size_of::<u16>() + size_of::<u32>() + size_of::<u16>();
                 for entry in local_variable_table {
-                    entry.write(buff)?
+                    bytes_written += entry.write(buff)?
                 }
+                Ok(bytes_written)
             }
             Attribute::LocalVariableTypeTable {
                 attribute_name_index,
@@ -1384,9 +1635,11 @@ impl Attribute {
                 buff.write_u16::<BigEndian>(attribute_name_index)?;
                 buff.write_u32::<BigEndian>(attribute_length)?;
                 buff.write_u16::<BigEndian>(local_variable_type_table_length)?;
+                let mut bytes_written = size_of::<u16>() + size_of::<u32>() + size_of::<u16>();
                 for entry in local_variable_type_table {
-                    entry.write(buff)?
+                    bytes_written += entry.write(buff)?
                 }
+                Ok(bytes_written)
             }
             Attribute::Deprecated {
                 attribute_name_index,
@@ -1394,6 +1647,7 @@ impl Attribute {
             } => {
                 buff.write_u16::<BigEndian>(attribute_name_index)?;
                 buff.write_u32::<BigEndian>(attribute_length)?;
+                Ok(size_of::<u16>() + size_of::<u32>())
             }
             Attribute::RuntimeVisibleAnnotations {
                 attribute_name_index,
@@ -1404,9 +1658,11 @@ impl Attribute {
                 buff.write_u16::<BigEndian>(attribute_name_index)?;
                 buff.write_u32::<BigEndian>(attribute_length)?;
                 buff.write_u16::<BigEndian>(num_annotations)?;
+                let mut bytes_written = size_of::<u16>() + size_of::<u32>() + size_of::<u16>();
                 for one_annotation in annotations {
-                    one_annotation.write(buff)?;
+                    bytes_written += one_annotation.write(buff)?;
                 }
+                Ok(bytes_written)
             }
             Attribute::RuntimeInvisibleAnnotations {
                 attribute_name_index,
@@ -1417,9 +1673,11 @@ impl Attribute {
                 buff.write_u16::<BigEndian>(attribute_name_index)?;
                 buff.write_u32::<BigEndian>(attribute_length)?;
                 buff.write_u16::<BigEndian>(num_annotations)?;
+                let mut bytes_written = size_of::<u16>() + size_of::<u32>() + size_of::<u16>();
                 for one_annotation in annotations {
-                    one_annotation.write(buff)?;
+                    bytes_written += one_annotation.write(buff)?;
                 }
+                Ok(bytes_written)
             }
             Attribute::RuntimeVisibleParameterAnnotations {
                 attribute_name_index,
@@ -1430,9 +1688,11 @@ impl Attribute {
                 buff.write_u16::<BigEndian>(attribute_name_index)?;
                 buff.write_u32::<BigEndian>(attribute_length)?;
                 buff.write_u8(num_parameters)?;
+                let mut bytes_written = size_of::<u16>() + size_of::<u32>() + size_of::<u8>();
                 for one_annotation in parameter_annotations {
-                    one_annotation.write(buff)?;
+                    bytes_written += one_annotation.write(buff)?;
                 }
+                Ok(bytes_written)
             }
             Attribute::RuntimeInvisibleParameterAnnotations {
                 attribute_name_index,
@@ -1443,9 +1703,11 @@ impl Attribute {
                 buff.write_u16::<BigEndian>(attribute_name_index)?;
                 buff.write_u32::<BigEndian>(attribute_length)?;
                 buff.write_u8(num_parameters)?;
+                let mut bytes_written = size_of::<u16>() + size_of::<u32>() + size_of::<u8>();
                 for one_annotation in parameter_annotations {
-                    one_annotation.write(buff)?;
+                    bytes_written += one_annotation.write(buff)?;
                 }
+                Ok(bytes_written)
             }
             Attribute::RuntimeVisibleTypeAnnotations {
                 attribute_name_index,
@@ -1456,9 +1718,11 @@ impl Attribute {
                 buff.write_u16::<BigEndian>(attribute_name_index)?;
                 buff.write_u32::<BigEndian>(attribute_length)?;
                 buff.write_u16::<BigEndian>(num_parameters)?;
+                let mut bytes_written = size_of::<u16>() + size_of::<u32>() + size_of::<u16>();
                 for one_annotation in annotations {
-                    one_annotation.write(buff)?;
+                    bytes_written += one_annotation.write(buff)?;
                 }
+                Ok(bytes_written)
             }
             Attribute::RuntimeInvisibleTypeAnnotations {
                 attribute_name_index,
@@ -1469,9 +1733,11 @@ impl Attribute {
                 buff.write_u16::<BigEndian>(attribute_name_index)?;
                 buff.write_u32::<BigEndian>(attribute_length)?;
                 buff.write_u16::<BigEndian>(num_parameters)?;
+                let mut bytes_written = size_of::<u16>() + size_of::<u32>() + size_of::<u16>();
                 for one_annotation in annotations {
-                    one_annotation.write(buff)?;
+                    bytes_written += one_annotation.write(buff)?;
                 }
+                Ok(bytes_written)
             }
             Attribute::AnnotationDefault {
                 attribute_name_index,
@@ -1480,21 +1746,25 @@ impl Attribute {
             } => {
                 buff.write_u16::<BigEndian>(attribute_name_index)?;
                 buff.write_u32::<BigEndian>(attribute_length)?;
-                default_value.write(buff)?;
+                let mut bytes_written = size_of::<u16>() + size_of::<u32>();
+                bytes_written += default_value.write(buff)?;
+                Ok(bytes_written)
             }
             Attribute::BootstrapMethods {
                 attribute_name_index,
                 attribute_length,
                 num_bootstrap_methods,
                 bootstrap_methods,
-            } => unsafe {
+            } => {
                 buff.write_u16::<BigEndian>(attribute_name_index)?;
                 buff.write_u32::<BigEndian>(attribute_length)?;
                 buff.write_u16::<BigEndian>(num_bootstrap_methods)?;
+                let mut bytes_written = size_of::<u16>() + size_of::<u32>() + size_of::<u16>();
                 for one_method in bootstrap_methods {
-                    one_method.write(buff)?;
+                    bytes_written += one_method.write(buff)?;
                 }
-            },
+                Ok(bytes_written)
+            }
             Attribute::MethodParameters {
                 attribute_name_index,
                 attribute_length,
@@ -1504,9 +1774,11 @@ impl Attribute {
                 buff.write_u16::<BigEndian>(attribute_name_index)?;
                 buff.write_u32::<BigEndian>(attribute_length)?;
                 buff.write_u8(parameters_count)?;
+                let mut bytes_written = size_of::<u16>() + size_of::<u32>() + size_of::<u8>();
                 for one_parameter in parameters {
-                    one_parameter.write(buff)?;
+                    bytes_written += one_parameter.write(buff)?;
                 }
+                Ok(bytes_written)
             }
             Attribute::Module {
                 attribute_name_index,
@@ -1521,64 +1793,60 @@ impl Attribute {
                 opens_count,
                 opens,
                 uses_count,
-                uses_index,
+                ref uses_index,
                 provides_count,
                 provides,
-            } => unsafe {
+            } => {
                 buff.write_u16::<BigEndian>(attribute_name_index)?;
                 buff.write_u32::<BigEndian>(attribute_length)?;
                 buff.write_u16::<BigEndian>(module_name_index)?;
                 buff.write_u16::<BigEndian>(module_flags)?;
                 buff.write_u16::<BigEndian>(module_version_index)?;
+                let mut bytes_written =
+                    size_of::<u16>() + size_of::<u32>() + size_of::<u16>() + size_of::<u16>() + size_of::<u16>();
 
                 buff.write_u16::<BigEndian>(requires_count)?;
+                bytes_written += size_of::<u16>();
                 for one_require in requires {
-                    one_require.write(buff)?;
+                    bytes_written += one_require.write(buff)?;
                 }
 
                 buff.write_u16::<BigEndian>(exports_count)?;
+                bytes_written += size_of::<u16>();
                 for one_export in exports {
-                    one_export.write(buff)?;
+                    bytes_written += one_export.write(buff)?;
                 }
 
                 buff.write_u16::<BigEndian>(opens_count)?;
+                bytes_written += size_of::<u16>();
                 for one_open in opens {
-                    one_open.write(buff)?;
+                    bytes_written += one_open.write(buff)?;
                 }
 
                 buff.write_u16::<BigEndian>(uses_count)?;
-                buff.write(
-                    uses_index
-                        .iter()
-                        .map(|e| e.to_be())
-                        .collect::<Vec<type_alias::u2>>()
-                        .align_to::<u8>()
-                        .1,
-                )?;
+                bytes_written += size_of::<u16>();
+                bytes_written += write_vec_u16_as_bytes(uses_index, buff)?;
 
                 buff.write_u16::<BigEndian>(provides_count)?;
+                bytes_written += size_of::<u16>();
                 for one_provide in provides {
-                    one_provide.write(buff)?;
+                    bytes_written += one_provide.write(buff)?;
                 }
-            },
+                Ok(bytes_written)
+            }
             Attribute::ModulePackages {
                 attribute_name_index,
                 attribute_length,
                 package_count,
-                package_index,
-            } => unsafe {
+                ref package_index,
+            } => {
                 buff.write_u16::<BigEndian>(attribute_name_index)?;
                 buff.write_u32::<BigEndian>(attribute_length)?;
                 buff.write_u16::<BigEndian>(package_count)?;
-                buff.write(
-                    package_index
-                        .iter()
-                        .map(|e| e.to_be())
-                        .collect::<Vec<type_alias::u2>>()
-                        .align_to::<u8>()
-                        .1,
-                )?;
-            },
+                let mut bytes_written = size_of::<u16>() + size_of::<u32>() + size_of::<u16>();
+                bytes_written += write_vec_u16_as_bytes(package_index, buff)?;
+                Ok(bytes_written)
+            }
             Attribute::ModuleMainClass {
                 attribute_name_index,
                 attribute_length,
@@ -1587,6 +1855,7 @@ impl Attribute {
                 buff.write_u16::<BigEndian>(attribute_name_index)?;
                 buff.write_u32::<BigEndian>(attribute_length)?;
                 buff.write_u16::<BigEndian>(main_class_index)?;
+                Ok(size_of::<u16>() + size_of::<u32>() + size_of::<u16>())
             }
             Attribute::NestHost {
                 attribute_name_index,
@@ -1596,25 +1865,21 @@ impl Attribute {
                 buff.write_u16::<BigEndian>(attribute_name_index)?;
                 buff.write_u32::<BigEndian>(attribute_length)?;
                 buff.write_u16::<BigEndian>(host_class_index)?;
+                Ok(size_of::<u16>() + size_of::<u32>() + size_of::<u16>())
             }
             Attribute::NestMembers {
                 attribute_name_index,
                 attribute_length,
                 number_of_classes,
-                classes,
-            } => unsafe {
+                ref classes,
+            } => {
                 buff.write_u16::<BigEndian>(attribute_name_index)?;
                 buff.write_u32::<BigEndian>(attribute_length)?;
                 buff.write_u16::<BigEndian>(number_of_classes)?;
-                buff.write(
-                    classes
-                        .iter()
-                        .map(|e| e.to_be())
-                        .collect::<Vec<type_alias::u2>>()
-                        .align_to::<u8>()
-                        .1,
-                )?;
-            },
+                let mut bytes_written = size_of::<u16>() + size_of::<u32>() + size_of::<u16>();
+                bytes_written += write_vec_u16_as_bytes(classes, buff)?;
+                Ok(bytes_written)
+            }
             Attribute::Record {
                 attribute_name_index,
                 attribute_length,
@@ -1624,28 +1889,25 @@ impl Attribute {
                 buff.write_u16::<BigEndian>(attribute_name_index)?;
                 buff.write_u32::<BigEndian>(attribute_length)?;
                 buff.write_u16::<BigEndian>(components_count)?;
-                for one_parameter in components {
-                    one_parameter.write(buff)?;
+                let mut bytes_written = size_of::<u16>() + size_of::<u32>() + size_of::<u16>();
+                for one_component_info in components {
+                    bytes_written += one_component_info.write(buff)?;
                 }
+                Ok(bytes_written)
             }
             Attribute::PermittedSubclasses {
                 attribute_name_index,
                 attribute_length,
                 number_of_classes,
-                classes,
-            } => unsafe {
+                ref classes,
+            } => {
                 buff.write_u16::<BigEndian>(attribute_name_index)?;
                 buff.write_u32::<BigEndian>(attribute_length)?;
                 buff.write_u16::<BigEndian>(number_of_classes)?;
-                buff.write(
-                    classes
-                        .iter()
-                        .map(|e| e.to_be())
-                        .collect::<Vec<type_alias::u2>>()
-                        .align_to::<u8>()
-                        .1,
-                )?;
-            },
+                let mut bytes_written = size_of::<u16>() + size_of::<u32>() + size_of::<u16>();
+                bytes_written += write_vec_u16_as_bytes(classes, buff)?;
+                Ok(bytes_written)
+            }
             Attribute::ExternalAttribute {
                 attribute_name_index,
                 attribute_length,
@@ -1653,10 +1915,23 @@ impl Attribute {
             } => {
                 buff.write_u16::<BigEndian>(attribute_name_index)?;
                 buff.write_u32::<BigEndian>(attribute_length)?;
-                buff.write(&*data)?;
+                let mut bytes_written = size_of::<u16>() + size_of::<u32>();
+                bytes_written += buff.write(&data)?;
+                Ok(bytes_written)
             }
         }
-        Ok(())
+    }
+}
+
+fn write_vec_u16_as_bytes<B: Write>(vec: &[type_alias::u2], buff: &mut B) -> Result<usize, Error> {
+    unsafe {
+        buff.write(
+            vec.iter()
+                .map(|e| e.to_be())
+                .collect::<Box<[type_alias::u2]>>()
+                .align_to::<u8>()
+                .1,
+        )
     }
 }
 
