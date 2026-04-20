@@ -259,27 +259,28 @@ impl eframe::App for App {
             {
                 app_stages::debug_stages::debug_stages(ui, self);
             }
+            egui::ScrollArea::vertical().show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new(localize("options.autoupdate_versions")))
+                        .on_hover_text(localize("options.autoupdate_versions.tooltip"));
+                    components::toggle_ui_compact(ui, &mut self.autoupdate_versions);
+                });
 
-            ui.horizontal(|ui| {
-                ui.label(egui::RichText::new(localize("options.autoupdate_versions")))
-                    .on_hover_text(localize("options.autoupdate_versions.tooltip"));
-                components::toggle_ui_compact(ui, &mut self.autoupdate_versions);
+                let app_state = *self.state.lock().unwrap();
+                match app_state {
+                    AppState::Started => self.ensure_versions_json(),
+                    AppState::ValidatingCache => app_stages::validating_cache::app_validating_cache(ui),
+                    AppState::DownloadingMappings => {}
+                    AppState::Deobfuscating => {}
+                    AppState::Ready => app_stages::ready::app_ready(ui, ctx, self),
+                }
+                self.toasts
+                    .lock()
+                    .map(|mut toasts| {
+                        toasts.show(ctx);
+                    })
+                    .expect("Unable to show toasts");
             });
-
-            let app_state = *self.state.lock().unwrap();
-            match app_state {
-                AppState::Started => self.ensure_versions_json(),
-                AppState::ValidatingCache => app_stages::validating_cache::app_validating_cache(ui),
-                AppState::DownloadingMappings => {}
-                AppState::Deobfuscating => {}
-                AppState::Ready => app_stages::ready::app_ready(ui, ctx, self),
-            }
-            self.toasts
-                .lock()
-                .map(|mut toasts| {
-                    toasts.show(ctx);
-                })
-                .expect("Unable to show toasts");
         });
     }
 
