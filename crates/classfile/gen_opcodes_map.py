@@ -6,7 +6,6 @@ from pathlib import Path
 
 from bs4 import BeautifulSoup
 
-
 cache_path = Path("./java_opcodes.html")
 opcodes_rs_file = Path("./src/opcodes.rs")
 lib_rs_file = Path("./src/lib.rs")
@@ -48,12 +47,12 @@ class Opcode:
     desc: str
     stack_pop: int
     stack_push: int
-    
+
     def into_rs(self) -> str:
         return f"Opcode {{ opcode: 0x{self.opcode:02x}, opname: \"{self.opname}\", oplen: {self.oplen} }}"
 
 
-def download_jvm_opcodes_spec(jvm_version: int = 23) -> str:
+def download_jvm_opcodes_spec(jvm_version: int) -> str:
     req = urllib.request.urlopen(
         url=f"https://docs.oracle.com/javase/specs/jvms/se{jvm_version}/html/jvms-6.html",
         timeout=60,
@@ -61,9 +60,10 @@ def download_jvm_opcodes_spec(jvm_version: int = 23) -> str:
     return req.read().decode("utf-8")
 
 
-def fetch_jvm_opcodes_spec() -> str:
+def fetch_jvm_opcodes_spec(jvm_version: int = 23) -> str:
     if not cache_path.exists():
-        spec = download_jvm_opcodes_spec()
+        print(f"Fetching opcodes for java se{jvm_version}")
+        spec = download_jvm_opcodes_spec(jvm_version)
         with cache_path.open(mode="w") as f:
             f.write(spec)
     else:
@@ -92,12 +92,15 @@ def gen_opcodes_byte_map(opcodes: list[Opcode]) -> str:
     opcodes_byte_map = ""
     opcodes_byte_map += opcodes_byte_map_head_rs
 
+    opcodes_list = []
+
     for opcode in opcodes_byte_mapping:
         if opcode is None:
-            opcodes_byte_map += f"{tab}None,\n"
+            opcodes_list.append(f"{tab}None,")
             continue
-        opcodes_byte_map += f"{tab}Some(Opcodes::{opcode.opname.upper()}),\n"
+        opcodes_list.append(f"{tab}Some(Opcodes::{opcode.opname.upper()}),")
 
+    opcodes_byte_map += "\n".join(opcodes_list)
     opcodes_byte_map += opcodes_byte_map_tail_rs
     return opcodes_byte_map
 
@@ -107,7 +110,7 @@ if __name__ == "__main__":
     soup = BeautifulSoup(opcodes_spec, "lxml")
     opcodes_pars = soup.find_all("div", class_="section-execution")
     opcodes: list[Opcode] = []
-    
+
     for par in opcodes_pars[1:]:
         (_, op_par, op_operands_par, op_forms_par, op_stack_par, *rem) = par.find_all("div", recursive=False)
 
@@ -117,7 +120,7 @@ if __name__ == "__main__":
         opcode_len = 0
         for opcode_operand in opcode_operands:
             opcode_len += 1
-        
+
         # skip first example
         for opcode_form in opcode_forms:
             row = opcode_form.text.strip()
@@ -135,11 +138,10 @@ if __name__ == "__main__":
             opcodes.append(opcode)
 
     opcodes = list(sorted(opcodes, key=lambda op: op.opname))
-    
+
     opcodes_rs_code = ""
     opcodes_rs_code += gen_opcodes_structs(opcodes)
     opcodes_rs_code += gen_opcodes_byte_map(opcodes)
-
 
     with opcodes_rs_file.open(mode="w") as f:
         f.write(opcodes_rs_code)
