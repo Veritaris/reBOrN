@@ -1,0 +1,12 @@
+[submodule "crates/tsrg_trie"]
+	path = crates/tsrg_trie
+	url = git@github.com:Veritaris/tsrg_trie.git
+[submodule "crates/mc_deobf"]
+	path = crates/mc_deobf
+	url = git@github.com:Veritaris/mc_deobf.git
+[submodule "crates/classfile"]
+	path = crates/classfile
+	url = git@github.com:Veritaris/classfile.git
+[submodule "crates/decompiler"]
+	path = crates/decompiler
+	url = git@github.com:Veritaris/decompiler.git
