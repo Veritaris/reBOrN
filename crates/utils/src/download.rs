@@ -1,8 +1,9 @@
 use std::io::{BufWriter, Write};
 use std::ops::Deref;
 use std::path::Path;
+use std::thread::JoinHandle;
 
-const SOURCE_DATA_DEFAULT_URL: &'static str = "https://mcp.thiakil.com/data";
+const SOURCE_DATA_DEFAULT_URL: &str = "https://mcp.thiakil.com/data";
 const MAPPINGS_KINDS: [&str; 3] = ["fields.csv", "methods.csv", "params.csv"];
 
 pub fn download_file<P: AsRef<Path>>(save_path: P, url: &String) -> Result<(), reqwest::Error> {
@@ -15,13 +16,14 @@ pub fn download_file<P: AsRef<Path>>(save_path: P, url: &String) -> Result<(), r
             let data_file = std::fs::File::create(save_path).unwrap();
 
             let mut file_writer = BufWriter::new(data_file);
-            let _ = file_writer.write(response.bytes()?.deref()).unwrap();
+            let bytes = response.bytes()?;
+            let _ = file_writer.write(bytes.deref()).unwrap();
             Ok(())
         }
     }
 }
 
-pub fn download_tsrg<P: AsRef<Path>>(store_dir: P, mc_version: &str) {
+pub fn download_tsrg<P: AsRef<Path>>(store_dir: P, mc_version: &str) -> JoinHandle<()> {
     let file_url = format!("{SOURCE_DATA_DEFAULT_URL}/{mc_version}/joined.tsrg");
 
     let save_path = store_dir.as_ref().join("mappings").join(mc_version).join("joined.tsrg");
@@ -35,10 +37,16 @@ pub fn download_tsrg<P: AsRef<Path>>(store_dir: P, mc_version: &str) {
                 println!("error while downloading joined.tsrg: {err}");
             }
         };
-    });
+    })
 }
 
-pub fn download_mappings<P: AsRef<Path>>(store_dir: P, mc_version: &str, channel: &str, mappings_version: &str) {
+pub fn download_mappings<P: AsRef<Path>, F: FnOnce()>(
+    store_dir: P,
+    mc_version: &str,
+    channel: &str,
+    mappings_version: &str,
+    on_finish: Option<F>,
+) {
     let mappings_url_prepath = format!("{}/{}/{}", mc_version, channel, mappings_version);
     let mappings_url = format!("{SOURCE_DATA_DEFAULT_URL}/{mappings_url_prepath}");
     let mut v = Vec::<std::thread::JoinHandle<()>>::new();
@@ -65,5 +73,11 @@ pub fn download_mappings<P: AsRef<Path>>(store_dir: P, mc_version: &str, channel
             };
         }));
     }
-    download_tsrg(&store_dir, mc_version);
+    v.push(download_tsrg(&store_dir, mc_version));
+    for join_handle in v {
+        join_handle.join();
+    }
+    if let Some(f) = on_finish {
+        f()
+    }
 }

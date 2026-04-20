@@ -1,8 +1,5 @@
 #![warn(clippy::all, rust_2018_idioms)]
-#![cfg_attr(
-    all(not(debug_assertions), feature = "gui"),
-    windows_subsystem = "windows"
-)]
+#![cfg_attr(all(not(debug_assertions), feature = "gui"), windows_subsystem = "windows")]
 
 #[cfg(feature = "cli")]
 use clap::Parser;
@@ -12,7 +9,7 @@ use colored::Colorize;
 fn main() {
     #[cfg(feature = "cli")]
     {
-        let mut args = reborn::cli::RebornCliArgs::parse();
+        let mut args = mc_deobf::args::RebornCliArgs::parse();
 
         if args.show_versions || args.input.is_empty() {
             if args.input.is_empty() {
@@ -60,12 +57,11 @@ fn main() {
                     println!("{} {}", prefix, map_type_text);
 
                     for (i, map_version) in map_versions.iter().enumerate() {
-                        let map_version_text =
-                            if utils::cache::mappings_exists(game_version, map_type, map_version) {
-                                map_version.green()
-                            } else {
-                                map_version.red()
-                            };
+                        let map_version_text = if utils::cache::mappings_exists(game_version, map_type, map_version) {
+                            map_version.green()
+                        } else {
+                            map_version.red()
+                        };
 
                         let repr_prefix = if i == (map_versions.len() - 1) {
                             "└──"
@@ -88,17 +84,17 @@ fn main() {
             args.print_code = true;
         }
 
-        if args.input.len() > 0 {
+        if !args.input.is_empty() {
             let mut input_files: Vec<String> = vec![];
             if !utils::cache::mappings_exists(
                 args.game_version.as_str(),
                 args.mappings_channel.as_str(),
                 args.mappings_version.as_str(),
             ) {
-                reborn::remapper::prepare_mappings(&args);
+                mc_deobf::remapper::prepare_mappings(&args);
             }
-            reborn::remapper::gather_input_files(&mut input_files, &args.input);
-            reborn::remapper::remap_files(&args, &input_files);
+            mc_deobf::remapper::gather_input_files(&mut input_files, &args.input);
+            mc_deobf::remapper::remap_files(&args, &input_files);
             return;
         }
     }

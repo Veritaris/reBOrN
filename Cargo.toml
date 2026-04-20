@@ -1,34 +1,33 @@
 [workspace]
-members = ["crates/classfile", "crates/decompiler", "crates/gui", "crates/tsrg_trie", "crates/utils"]
+members = ["crates/classfile", "crates/decompiler", "crates/gui", "crates/mc_deobf", "crates/tsrg_trie", "crates/utils"]
 
 [workspace.package]
 authors = ["Georgii Imeshkenov <georgiiimesh@gmail.com>"]
-edition = "2021"
-rust-version = "1.78"
+edition = "2024"
+rust-version = "1.89.0"
+
+[workspace.dependencies]
+zip = { version = "8.5.1", default-features = false, features = ["deflate", "deflate-zopfli"] }
+indoc = { version = "2.0.7" }
 
 [package]
 name = "reborn"
 version = "1.0.0"
 authors = ["Georgii Imeshkenov <georgiiimesh@gmail.com>"]
-edition = "2021"
-rust-version = "1.78"
+edition = "2024"
+rust-version = "1.89.0"
 
 [dependencies]
-linked-hash-map = { version = "0.5.6", default-features = false }
-byteorder = { version = "1.5.0", default-features = false }
-csv = { version = "1.3.0", default-features = false }
-jni = { version = "0.21.1", default-features = false }
-clap = { version = "4.5.17", features = ["derive"] }
-zip = { version = "4.3.0", default-features = false, features = ["deflate", "deflate-zopfli"] }
-serde = { version = "1.0.210", features = ["derive"] }
-colored = { version = "3.0.0" }
-indoc = { version = "2.0.6" }
-num_cpus = { version = "1.16.0" }
+# Workspace dependencies first
+zip = { workspace = true }
+indoc = { workspace = true }
 
-classfile = { path = "crates/classfile", features = [] }
+clap = { version = "4.5.53", features = ["derive"] }
+colored = { version = "3.0.0" }
+
 gui = { path = "crates/gui" }
 utils = { path = "crates/utils" }
-tsrg_trie = { path = "crates/tsrg_trie" }
+mc_deobf = { path = "crates/mc_deobf" }
 
 [build-dependencies]
 winres = { git = "https://github.com/Nilstrieb/winres", branch = "linking-flags" }

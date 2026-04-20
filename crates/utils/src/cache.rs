@@ -116,7 +116,7 @@ pub fn ensure_versions_json(file_hash: Option<String>) -> Result<String, Error> 
         false
     };
 
-    if !(&versions_json_path.exists() & hash_matches) {
+    if !(versions_json_path.exists() & hash_matches) {
         print!("need re-download versions.json, reason: ");
         println!(
             "{}",
@@ -152,11 +152,11 @@ pub fn read_versions_json() -> LinkedHashMap<String, HashMap<String, Vec<String>
     let cache_dir = get_appdata_dir();
     let cache_dir_path = cache_dir.cache_dir();
     let versions_json_path = cache_dir_path.join(Path::new("versions.json"));
-    println!("{:?}", versions_json_path);
+    println!("versions.json is stored at {:?}", versions_json_path);
     let file = std::fs::File::open(versions_json_path).unwrap();
     let reader = BufReader::new(file);
-    println!("{:?}", cache_dir);
-    println!("{:?}", cache_dir_path);
+    println!("cache dir is{:?}", cache_dir);
+    println!("cache dir path is {:?}", cache_dir_path);
     let hm = serde_json::from_reader::<BufReader<std::fs::File>, HashMap<String, HashMap<String, Vec<String>>>>(reader)
         .unwrap();
 

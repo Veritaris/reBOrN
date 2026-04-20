@@ -11,9 +11,10 @@ const en_EU: &[u8] = include_bytes!("../../../resources/localisation/en_EU.lang"
 type LocalesHashMap = HashMap<&'static str, HashMap<&'static str, &'static str>>;
 
 // pub fn get_locales() -> Box<&'static LocalesHashMap> {
-//     let mut locales: &'static LocalesHashMap = HashMap::<&'static str, HashMap<&'static str, &'static str>>::new();
-//     // let mut ru_locale
-//     Box::new(locales)
+    // let mut locales: &'static LocalesHashMap = HashMap::<&'static str, HashMap<&'static str, &'static str>>::new();
+    // let mut locales: &'static LocalesHashMap = &LocalesHashMap::new();
+    // let mut ru_locale
+    // Box::new(locales)
 // }
 pub fn localize(key: &str) -> &str {
     key

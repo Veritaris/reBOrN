@@ -10,3 +10,5 @@ __pycache__
 .python-version
 *.iml
 .git
+**/*.class
+/*.jar
