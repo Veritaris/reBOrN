@@ -1,0 +1,36 @@
+[package]
+name = "reBOrN"
+version = "0.1.0"
+authors = ["Georgii Imeshkenov <georgiiimesh@gmail.com>"]
+edition = "2021"
+rust-version = "1.72"
+
+[dependencies]
+egui = "0.26.0"
+eframe = { version = "0.26.0", default-features = false, features = [
+    "accesskit",
+    "default_fonts",
+    "glow",
+    "persistence",
+] }
+log = "0.4"
+serde = { version = "1.0.197", features = ["derive"] }
+linked-hash-map = "0.5.6"
+classy = "0.3.0"
+classfile-parser = "0.3.7"
+zip = "0.6.6"
+byteorder = "1.5.0"
+cafebabe = "0.6.1"
+
+[build-dependencies]
+winres = { git = "https://github.com/Nilstrieb/winres", branch = "linking-flags" }
+
+[profile.release]
+opt-level = 0
+
+
+[profile.dev.package."*"]
+opt-level = 0
+
+
+[patch.crates-io]
