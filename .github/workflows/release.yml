@@ -83,3 +83,11 @@ jobs:
           make_latest: true
           files: |
             ${{ env.ASSET }}
+
+      - name: Set final commit status
+        uses: myrotvorets/set-commit-status-action@master
+        if: always()
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          status: ${{ job.status }}
+          context: Release status
