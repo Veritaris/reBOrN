@@ -51,8 +51,6 @@ pub struct App {
     pub(crate) set_cache_dir: String,
     pub(crate) clean_cache_dir: bool,
     packages_filter: Vec<String>,
-    // input: Vec,
-    // output: Option,
     pub(crate) no_deobf: bool,
     pub(crate) progress: bool,
     pub(crate) strip_resources: bool,
@@ -82,6 +80,9 @@ pub struct App {
 
     #[serde(skip)]
     app_cache: Arc<Mutex<RebornCache>>,
+
+    #[serde(skip)]
+    pub deobf_suffix_value: String,
 
     #[serde(skip)]
     pub(crate) state: Arc<Mutex<AppState>>,
@@ -132,6 +133,7 @@ impl Default for App {
             picked_files: None,
             files_to_deobfuscate: Arc::new(Vec::<String>::default()),
             app_cache: Arc::new(Mutex::new(RebornCache::load())),
+            deobf_suffix_value: String::default(),
             state: Arc::new(Mutex::new(AppState::Started)),
             deobf_target_select_state: DeobfMappingsType::VersionsJSON,
             fields_file: None,

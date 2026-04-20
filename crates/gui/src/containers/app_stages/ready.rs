@@ -113,6 +113,12 @@ pub fn app_ready(ui: &mut Ui, ctx: &egui::Context, app: &mut App) {
             }
         };
 
+        let deobf_suffix = if app.deobf_suffix_value.is_empty() {
+            None
+        } else {
+            Some(app.deobf_suffix_value.clone())
+        };
+
         let deobf_args = RebornCliArgs {
             input: input.clone(),
             verbose: app.verbose,
@@ -134,6 +140,7 @@ pub fn app_ready(ui: &mut Ui, ctx: &egui::Context, app: &mut App) {
             compress_resources: app.compress_resources,
             mappings_type: app.deobf_target_select_state,
             extra_mappings: custom_mappings_as_extra_mappings,
+            deobf_suffix,
             output,
             ..Default::default()
         };

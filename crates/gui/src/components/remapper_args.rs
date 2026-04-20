@@ -2,6 +2,7 @@ use crate::app::App;
 use crate::components;
 use crate::localisation::localize;
 use mc_deobf::mappings::ModLoader;
+use std::sync::LockResult;
 
 pub fn remapper_args_block(ui: &mut egui::Ui, app: &mut App) {
     egui::CollapsingHeader::new(localize("deobfuscation.remapper_args"))
@@ -17,6 +18,12 @@ pub fn remapper_args_block(ui: &mut egui::Ui, app: &mut App) {
                             ui.selectable_value(&mut app.verbose, i, format!("{}", i));
                         }
                     });
+            });
+
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new(localize("options.deobf_suffix")))
+                    .on_hover_text(localize("options.deobf_suffix.tooltip"));
+                ui.text_edit_singleline(&mut app.deobf_suffix_value);
             });
 
             ui.horizontal(|ui| {
