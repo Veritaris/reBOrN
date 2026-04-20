@@ -43,7 +43,13 @@ jobs:
         shell: bash
         run: |
           binary_name="rebornDeobfuscationTool"
-
+          
+          if [ "${{ env.VERSION }}" = "refs/heads/master" ]; then
+            version=latest
+          else 
+            version="${{ env.VERSION }}"
+          fi
+          
           dirname="$binary_name-${{ env.VERSION }}-${{ matrix.target }}"
           mkdir "$dirname"
           if [ "${{ matrix.os }}" = "windows-latest" ]; then
