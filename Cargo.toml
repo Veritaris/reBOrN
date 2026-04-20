@@ -17,6 +17,11 @@ authors = ["Georgii Imeshkenov <georgiiimesh@gmail.com>"]
 edition = "2024"
 rust-version = "1.89.0"
 
+[package.metadata.bundle]
+name = "reBOrN"
+identifier = "me.veritaris.jarremapper"
+icon = ["resources/icon.icns"]
+
 [dependencies]
 # Workspace dependencies first
 zip = { workspace = true }
