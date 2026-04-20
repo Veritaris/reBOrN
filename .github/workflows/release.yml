@@ -25,7 +25,7 @@ jobs:
 
     steps:
       - name: Cloning
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Get the release version from the tag
         shell: bash
@@ -76,7 +76,7 @@ jobs:
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
-          appendBody: true
+          append_body: true
           make_latest: true
           files: |
             ${{ env.ASSET }}
