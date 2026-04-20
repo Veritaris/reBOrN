@@ -1,36 +1,42 @@
-[package]
-name = "reBOrN"
-version = "0.1.0"
+[workspace]
+members = ["crates/classfile", "crates/gui"]
+
+[workspace.package]
 authors = ["Georgii Imeshkenov <georgiiimesh@gmail.com>"]
 edition = "2021"
-rust-version = "1.72"
+rust-version = "1.78"
+
+[package]
+name = "reborn"
+version = "1.0.0"
+authors = ["Georgii Imeshkenov <georgiiimesh@gmail.com>"]
+edition = "2021"
+rust-version = "1.78"
 
 [dependencies]
-egui = "0.26.0"
-eframe = { version = "0.26.0", default-features = false, features = [
-    "accesskit",
-    "default_fonts",
-    "glow",
-    "persistence",
-] }
-log = "0.4"
+linked-hash-map = { version = "0.5.6", default-features = false }
+byteorder = { version = "1.5.0", default-features = false }
+csv = { version = "1.3.0", default-features = false }
+jni = { version = "0.21.1", default-features = false }
+clap = { version = "4.5.3", features = ["derive"] }
+zip = { version = "1.3.0", default-features = false, features = ["deflate", "deflate-zopfli"] }
 serde = { version = "1.0.197", features = ["derive"] }
-linked-hash-map = "0.5.6"
-classy = "0.3.0"
-classfile-parser = "0.3.7"
-zip = "0.6.6"
-byteorder = "1.5.0"
-cafebabe = "0.6.1"
+directories = { version = "5.0.1", default-features = false }
+reqwest = { version = "0.12.4", default-features = false }
+
+classfile = { path = "crates/classfile" }
+gui = { path = "crates/gui" }
 
 [build-dependencies]
 winres = { git = "https://github.com/Nilstrieb/winres", branch = "linking-flags" }
 
 [profile.release]
-opt-level = 0
-
+strip = true
 
 [profile.dev.package."*"]
 opt-level = 0
 
-
 [patch.crates-io]
+
+[features]
+gui = []

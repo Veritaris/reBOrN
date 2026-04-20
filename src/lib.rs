@@ -1,5 +1,6 @@
 #![warn(clippy::all, rust_2018_idioms)]
 
-mod app;
-mod utils;
-pub use app::reBOrNApp;
+pub mod mappings;
+pub mod deobfuscator;
+pub mod utils;
+pub mod cli;
