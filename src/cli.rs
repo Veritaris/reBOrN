@@ -1,6 +1,7 @@
 use clap::Parser;
+use crate::mappings::ModLoader;
 
-#[derive(Parser, Debug)]
+#[derive(Parser)]
 #[command(version, about, long_about = None)]
 pub struct RebornCliArgs {
     #[arg(
@@ -50,11 +51,27 @@ effect as 3\n"
 
     #[arg(
         long,
-        short,
-        default_value = "stable_12",
-        help = "Mappings 'channel', e.g. extra path after version\n"
+        value_enum,
+        default_value_t = ModLoader::FORGE,
+        help = "Mod loader to deobfuscate jar for"
     )]
-    pub mappings: String,
+    pub mod_loader: ModLoader,
+
+    #[arg(
+        long,
+        short,
+        default_value = "stable",
+        help = "Mappings 'channel', e.g. extra path after version. Commonly used are 'stable' for
+old versions, 'official' and 'parchment' on modern versions of Forge\n"
+    )]
+    pub mappings_channel: String,
+
+    #[arg(
+        long,
+        help = "Mappings version",
+        default_value = "12"
+    )]
+    pub mappings_version: String,
 
     #[arg(
         long,
@@ -87,6 +104,13 @@ Possible sources:
         Also see --cache-dir and --set-cached-dir options\n"
     )]
     pub cache_web_files: bool,
+    
+    #[arg(
+        long,
+        default_value = "false",
+        help = "Show versions from versions.json and downloaded mappings"
+    )]
+    pub show_versions: bool,
 
     #[arg(
         long,
@@ -132,7 +156,7 @@ Example: --input=jars
     #[arg(
         long,
         short,
-        required = true,
+        // required = true,
         help = "Input files to debf. You can pass both files and directories. If directory is \
 passed then all jars will be found recursively and added to deobf list\
 Example: --input=jars

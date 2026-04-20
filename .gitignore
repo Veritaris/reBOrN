@@ -3,3 +3,5 @@
 /.idea
 /crates/classfile/java_opcodes.html
 /jars/
+*.app
+*.dmg

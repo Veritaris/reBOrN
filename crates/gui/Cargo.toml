@@ -6,13 +6,19 @@ authors.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-egui = "0.27.2"
-eframe = { version = "0.27.2", default-features = false, features = [
+egui = "0.28.1"
+eframe = { version = "0.28.1", default-features = false, features = [
     "accesskit",
     "default_fonts",
     "glow",
     "persistence",
 ] }
-log = "0.4"
-serde = { version = "1.0.197", features = ["derive"] }
-env_logger = "0.11.3"
+egui_extras = { version = "0.28.1", features = ["all_loaders"] }
+image = { version = "0.25.2", features = ["jpeg", "png"] } # Add the types you want support for
+log = "0.4.22"
+serde = { version = "1.0.210", features = ["derive"] }
+env_logger = "0.11.5"
+linked-hash-map = { version = "0.5.6", default-features = false }
+lazy_static = "1.5.0"
+
+utils = { path = "../utils" }

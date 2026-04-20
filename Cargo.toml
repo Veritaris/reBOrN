@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/classfile", "crates/gui"]
+members = ["crates/classfile", "crates/gui", "crates/tsrg_trie", "crates/utils"]
 
 [workspace.package]
 authors = ["Georgii Imeshkenov <georgiiimesh@gmail.com>"]
@@ -18,14 +18,15 @@ linked-hash-map = { version = "0.5.6", default-features = false }
 byteorder = { version = "1.5.0", default-features = false }
 csv = { version = "1.3.0", default-features = false }
 jni = { version = "0.21.1", default-features = false }
-clap = { version = "4.5.3", features = ["derive"] }
-zip = { version = "1.3.0", default-features = false, features = ["deflate", "deflate-zopfli"] }
-serde = { version = "1.0.197", features = ["derive"] }
-directories = { version = "5.0.1", default-features = false }
-reqwest = { version = "0.12.4", default-features = false }
+clap = { version = "4.5.17", features = ["derive"] }
+zip = { version = "2.2.0", default-features = false, features = ["deflate", "deflate-zopfli"] }
+serde = { version = "1.0.210", features = ["derive"] }
+colored = { version = "2.1.0" }
 
 classfile = { path = "crates/classfile" }
 gui = { path = "crates/gui" }
+utils = { path = "crates/utils" }
+tsrg_trie = { path = "crates/tsrg_trie" }
 
 [build-dependencies]
 winres = { git = "https://github.com/Nilstrieb/winres", branch = "linking-flags" }

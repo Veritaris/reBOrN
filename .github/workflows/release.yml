@@ -65,7 +65,7 @@ jobs:
           if [ "${{ matrix.platform.os }}" = "windows-latest" ]; then
             mv "target/${{ matrix.platform.target }}/release/reborn.exe" "$dirname"
           else
-            mv "target/${{ matrix.platform.target }}/release/reborn" "$dirname"
+            cp "target/${{ matrix.platform.target }}/release/reborn" "$dirname"
           fi
 
           if [ "${{ matrix.platform.os }}" = "windows-latest" ]; then

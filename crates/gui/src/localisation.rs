@@ -2,8 +2,8 @@
 
 use std::collections::HashMap;
 
-const ru_RU: &[u8] = include_bytes!("../../../localisation/ru_RU.lang");
-const en_EU: &[u8] = include_bytes!("../../../localisation/en_EU.lang");
+const ru_RU: &[u8] = include_bytes!("../../../resources/localisation/ru_RU.lang");
+const en_EU: &[u8] = include_bytes!("../../../resources/localisation/en_EU.lang");
 
 type LocalesHashMap = HashMap<&'static str, HashMap<&'static str, &'static str>>;
 

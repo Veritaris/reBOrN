@@ -1,29 +1,40 @@
-use std::fs;
-use std::fs::File;
 use std::io::{BufReader, BufWriter, Error, stdout, Write};
 use std::path::{Path, PathBuf};
 
 use linked_hash_map::LinkedHashMap;
-use zip::ZipArchive;
 use classfile::classfile::ClassFile;
-
-use crate::{deobfuscator, mappings};
+use utils::cache;
+use crate::{remapper, mappings};
 use crate::cli::RebornCliArgs;
+
+const REMAPPED_SUFFIX: &'static str = "-remapped.jar";
+const JAR_SUFFIX: &'static str = ".jar";
 
 pub fn build_output_file_name(input_file_name: String, path: &Path) -> String {
     let canonical_path = path.canonicalize().unwrap();
     return if path.is_dir() {
-        canonical_path.join(input_file_name.strip_suffix(".jar").unwrap().to_owned() + "-deobf.jar").to_str().unwrap().to_string()
+        canonical_path.join(input_file_name.strip_suffix(JAR_SUFFIX).unwrap().to_owned() + REMAPPED_SUFFIX).to_str().unwrap().to_string()
     } else {
-        canonical_path.to_str().unwrap().strip_suffix(".jar").unwrap().to_owned() + "-deobf.jar"
+        canonical_path.to_str().unwrap().strip_suffix(JAR_SUFFIX).unwrap().to_owned() + REMAPPED_SUFFIX
     };
 }
 
-pub fn deobf_file(args: &RebornCliArgs, input_source_index: usize, input_file_full_path: &String) {
+pub fn remap_files(args: &RebornCliArgs, files: &Vec<String>) {
+    let mut stdout = stdout();
+    let files_amount = files.len();
+    for (i, file_path) in files.iter().enumerate() {
+        print!("\rProcessing [{}/{files_amount}]...", i + 1);
+        stdout.flush().unwrap();
+        remap_file(args, i, file_path);
+    }
+    println!();
+}
+
+pub fn remap_file(args: &RebornCliArgs, input_source_index: usize, input_file_full_path: &String) {
     let input_file_name = Path::new(input_file_full_path).file_name().unwrap().to_str().unwrap().to_string();
 
     let output_file_path = match args.output {
-        None => input_file_name.strip_suffix(".jar").unwrap().to_owned() + "-deobf.jar",
+        None => input_file_name.strip_suffix(JAR_SUFFIX).unwrap().to_owned() + REMAPPED_SUFFIX,
         Some(ref res) => {
             if &res.len() != &args.input.len() {
                 match &res.len() {
@@ -32,7 +43,7 @@ pub fn deobf_file(args: &RebornCliArgs, input_source_index: usize, input_file_fu
                     }
                     _ => {
                         println!("output must contain N entries where N is number of entry files or only 1 entry");
-                        input_file_name.strip_suffix(".jar").unwrap().to_owned() + "-deobf.jar"
+                        input_file_name.strip_suffix(JAR_SUFFIX).unwrap().to_owned() + REMAPPED_SUFFIX
                     }
                 }
             } else {
@@ -42,18 +53,23 @@ pub fn deobf_file(args: &RebornCliArgs, input_source_index: usize, input_file_fu
     };
 
     let input_file_path = Path::new(input_file_full_path);
-    let input_file = File::open(input_file_path).unwrap();
+    let input_file = std::fs::File::open(input_file_path).unwrap();
     let reader = BufReader::new(input_file);
 
-    let mut target_jar = ZipArchive::new(reader).unwrap();
-    let mut mappings = mappings::load_all_mappings(mappings::MAPPINGS_DIR).unwrap();
+    let mut target_jar = zip::ZipArchive::new(reader).unwrap();
+    let appdata = cache::get_appdata_dir();
+    let cache_dir = appdata.cache_dir();
+    let mapping_dir = cache_dir.join("mappings").join(args.game_version.as_str()).join(args.mappings_channel.as_str()).join(args.mappings_version.as_str());
+    println!("{:?}", mapping_dir);
+    let mut mappings = mappings::load_all_mappings(mapping_dir).unwrap();
+
     if args.verbose > 0 {
         println!("debug: {:?}", args.debug);
         println!("verbosity: {:?}", args.verbose);
-        println!("input file or dir to deobf: {}", input_file_full_path);
+        println!("input file or dir to remap: {}", input_file_full_path);
         println!("output file: {}", output_file_path);
         println!("game version: {}", args.game_version);
-        println!("using mappings: {}", args.mappings);
+        println!("using mappings: {}", args.mappings_channel);
     }
     if args.extra_mappings.len() > 0 {
         if args.verbose > 0 {
@@ -69,7 +85,7 @@ pub fn deobf_file(args: &RebornCliArgs, input_source_index: usize, input_file_fu
     common_mappings.extend(mappings.methods);
     common_mappings.extend(mappings.params);
 
-    match deobfuscator::deobfuscate_jar(
+    match remap_jar(
         &mut target_jar,
         output_file_path,
         &args,
@@ -79,10 +95,31 @@ pub fn deobf_file(args: &RebornCliArgs, input_source_index: usize, input_file_fu
         Err(_) => {}
     };
 
-    println!("Writing deobfuscated file...");
-    println!("deobfuscation of {:?} finished. Happy coding!", input_file_path.file_name().unwrap());
+    println!("Writing remapped file...");
+    println!("remapping of {:?} finished. Happy coding!", input_file_path.file_name().unwrap());
     if args.input.len() > 1 && input_source_index < args.input.len() - 1 {
         println!("{}", "=".repeat(80));
+    }
+}
+
+pub fn prepare_mappings(args: &RebornCliArgs) {
+    let (game_version, mappings_channel, mappings_version) = (
+        args.game_version.clone(),
+        args.mappings_channel.clone(),
+        args.mappings_version.clone()
+    );
+    let download_thread = std::thread::spawn(move || {
+        utils::download::download_mappings(
+            cache::get_appdata_dir().cache_dir(),
+            game_version.as_str(),
+            mappings_channel.as_str(),
+            mappings_version.as_str(),
+        );
+    });
+
+    match download_thread.join() {
+        Ok(_) => {}
+        Err(err) => {}
     }
 }
 
@@ -93,12 +130,12 @@ pub fn gather_input_files(input_files: &mut Vec<String>, dir_files: &Vec<String>
         if path.is_file() {
             input_files.push(String::from(path.canonicalize().unwrap().to_str().unwrap()));
         } else if path.is_dir() {
-            let nested_dir_files: Vec<String> = match fs::read_dir(file_path) {
+            let nested_dir_files: Vec<String> = match std::fs::read_dir(file_path) {
                 Ok(files) => {
                     files.into_iter().filter_map(|e| {
                         match e {
                             Ok(file) => {
-                                if !(file.metadata().unwrap().is_dir() || file.path().to_str().unwrap().ends_with(".jar")) {
+                                if !(file.metadata().unwrap().is_dir() || file.path().to_str().unwrap().ends_with(JAR_SUFFIX)) {
                                     None
                                 } else {
                                     match file.path().to_str() {
@@ -121,18 +158,7 @@ pub fn gather_input_files(input_files: &mut Vec<String>, dir_files: &Vec<String>
     }
 }
 
-pub fn deobf_many(args: &RebornCliArgs, files: &Vec<String>) {
-    let mut stdout = stdout();
-    let files_amount = files.len();
-    for (i, file_path) in files.iter().enumerate() {
-        print!("\rProcessing [{}/{files_amount}]...", i + 1);
-        stdout.flush().unwrap();
-        deobf_file(args, i, file_path);
-    }
-    println!();
-}
-
-pub fn deobfuscate_jar(
+pub fn remap_jar(
     jar: &mut zip::ZipArchive<BufReader<std::fs::File>>,
     output_file_path: String,
     args: &RebornCliArgs,

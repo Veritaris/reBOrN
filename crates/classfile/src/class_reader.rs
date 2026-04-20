@@ -56,25 +56,25 @@ impl<'a, 'b> ClassFile
                 format!("NameAndType<name={}, descriptor={}>", self.tag_to_display(name), self.tag_to_display(descriptor))
             }
             ConstantPoolTags::MethodHandle { .. } => {
-                String::from("not implemented")
+                String::from("MethodHandle<TODO>")
             }
             ConstantPoolTags::MethodType { .. } => {
-                String::from("not implemented")
+                String::from("MethodType<TODO>")
             }
             ConstantPoolTags::Dynamic { .. } => {
-                String::from("not implemented")
+                String::from("Dynamic<TODO>")
             }
             ConstantPoolTags::InvokeDynamic { .. } => {
-                String::from("not implemented")
+                String::from("InvokeDynamic<TODO>")
             }
-            ConstantPoolTags::Module { tag, name_index } => {
+            ConstantPoolTags::Module { name_index, .. } => {
                 format!("Module<name={}>", self.get_string_from_cpool(*name_index))
             }
-            ConstantPoolTags::Package { .. } => {
-                String::from("not implemented")
+            ConstantPoolTags::Package { name_index, .. } => {
+                format!("Module<name={}>", self.get_string_from_cpool(*name_index))
             }
             ConstantPoolTags::ContinuationTag { .. } => {
-                String::from("InvalidTag")
+                String::from("ContinuationTag")
             }
         }
     }
@@ -90,7 +90,7 @@ impl<'a, 'b> ClassFile
             _ => String::new()
         }
     }
-    pub fn read(len: u64, mut buff: BufReader<ZipFile<'b>>, mappings: Option<&LinkedHashMap<String, String>>) -> Result<ClassFile, Error> {
+    pub fn read(len: u64, mut buff: BufReader<ZipFile>, mappings: Option<&LinkedHashMap<String, String>>) -> Result<ClassFile, Error> {
         let magic = buff.read_u32::<BigEndian>()?;
         if magic != CLASS_HEADER {
             panic!("unexpected magic: {magic}");

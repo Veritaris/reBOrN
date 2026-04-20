@@ -1,0 +1,16 @@
+[package]
+name = "utils"
+version = "0.1.0"
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+reqwest = { version = "0.12.4", default-features = false, features = ["blocking", "brotli", "default-tls"] }
+directories-next = { version = "2.0.0", default-features = false }
+ron = { version = "0.8.1" }
+sha256 = { version = "1.5.0", default-features = false }
+serde = { version = "1.0.210", features = ["derive"] }
+lazy_static = { version = "1.5.0" }
+serde_json = { version = "1.0.128" }
+linked-hash-map = { version = "0.5.6", default-features = false }

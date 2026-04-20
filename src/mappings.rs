@@ -1,13 +1,19 @@
 use std::fmt::{Debug, Display, Formatter};
 use std::fs;
 use std::path::{Path, PathBuf};
-
+use clap::ValueEnum;
 use linked_hash_map::LinkedHashMap;
+use serde::de::Error;
 use serde::Deserialize;
 
-use crate::utils;
+pub const MAPPINGS_DIR: &str = "resources/mappings/1.7.10/stable/12"; // TODO(Veritaris): remove after cache && mappings downloading implemented successfully
 
-pub const MAPPINGS_DIR: &str = "mappings/1.7.10/stable/12";
+#[derive(Debug, Copy, Clone, ValueEnum)]
+pub enum ModLoader {
+    FORGE,
+    NEOFORGE,
+    FABRIC,
+}
 
 #[allow(unused)]
 #[derive(Deserialize)]
@@ -104,7 +110,7 @@ pub fn merge_mappings(
                         let values: Vec<(&str, &str)> = source.source.split(";")
                             .into_iter()
                             .filter_map(|e| {
-                                match utils::split_once(e, "=") {
+                                match utils::utils::split_once(e, "=") {
                                     None => None,
                                     Some((k, v)) => Some((k, v))
                                 }
@@ -140,7 +146,7 @@ pub fn merge_mappings(
 }
 
 pub fn parse_mappings_source(mappings: &String) -> Result<MappingsSource, MappingSourceParseError> {
-    let (m_kind, f_source) = match utils::split_once(mappings, ":") {
+    let (m_kind, f_source) = match utils::utils::split_once(mappings, ":") {
         None => { return Err(MappingSourceParseError); }
         Some(res) => { res }
     };
@@ -168,8 +174,8 @@ pub fn parse_mappings_source(mappings: &String) -> Result<MappingsSource, Mappin
 }
 
 
-pub fn get_mappings_file_path(mappings_dir: &Path, m_type: &MappingKind) -> PathBuf {
-    return mappings_dir.join(
+pub fn get_mappings_file_path<P: AsRef<Path>>(mappings_dir: P, m_type: &MappingKind) -> PathBuf {
+    return mappings_dir.as_ref().join(
         match m_type {
             MappingKind::Fields => "fields.csv",
             MappingKind::Methods => "methods.csv",
@@ -178,21 +184,23 @@ pub fn get_mappings_file_path(mappings_dir: &Path, m_type: &MappingKind) -> Path
     );
 }
 
-pub fn load_all_mappings(mappings_dir: &str) -> Result<Mappings, std::io::Error> {
-    let fields_mappings = load_mappings(
-        mappings_dir,
-        MappingKind::Fields,
-    )?;
+fn load_mappings_with_default<P: AsRef<Path>>(mappings_dir: P, kind: MappingKind) -> LinkedHashMap<String, String> {
+    match load_mappings(
+        &mappings_dir,
+        &kind,
+    ) {
+        Ok(it) => { it }
+        Err(err) => {
+            println!("unable to load mappings from {:?}, reason: {}. {:?} won't be remapped", mappings_dir.as_ref(), err, &kind);
+            LinkedHashMap::new()
+        }
+    }
+}
 
-    let method_mappings = load_mappings(
-        mappings_dir,
-        MappingKind::Methods,
-    )?;
-
-    let params_mappings = load_mappings(
-        mappings_dir,
-        MappingKind::Params,
-    )?;
+pub fn load_all_mappings<P: AsRef<Path>>(mappings_dir: P) -> Result<Mappings, std::io::Error> {
+    let fields_mappings = load_mappings_with_default(&mappings_dir, MappingKind::Fields);
+    let method_mappings = load_mappings_with_default(&mappings_dir, MappingKind::Methods);
+    let params_mappings = load_mappings_with_default(&mappings_dir, MappingKind::Params);
 
     Ok(Mappings {
         fields: fields_mappings,
@@ -201,16 +209,16 @@ pub fn load_all_mappings(mappings_dir: &str) -> Result<Mappings, std::io::Error>
     })
 }
 
-pub fn load_mappings(mappings_dir: &str, mapping_type: MappingKind) -> Result<LinkedHashMap<String, String>, std::io::Error> {
-    let m_path = get_mappings_file_path(Path::new(mappings_dir), &mapping_type);
+pub fn load_mappings<P: AsRef<Path>>(mappings_dir: &P, mapping_type: &MappingKind) -> Result<LinkedHashMap<String, String>, std::io::Error> {
+    let m_path = get_mappings_file_path(mappings_dir, &mapping_type);
     let file = fs::File::open(m_path)?;
-    let reader = std::io::BufReader::new(file);
-    let mut rdr = csv::Reader::from_reader(reader);
+    let buffered_reader = std::io::BufReader::new(file);
+    let mut csv_reader = csv::Reader::from_reader(buffered_reader);
 
     let mut sorted: Vec<(String, String)> =
         match mapping_type {
             MappingKind::Fields | MappingKind::Methods => {
-                rdr.deserialize::<MappingRecord>().into_iter()
+                csv_reader.deserialize::<MappingRecord>().into_iter()
                     .map(|r| r.unwrap())
                     .map(|r| {
                         (r.searge, r.name.clone())
@@ -218,7 +226,7 @@ pub fn load_mappings(mappings_dir: &str, mapping_type: MappingKind) -> Result<Li
                     ).collect()
             }
             MappingKind::Params => {
-                rdr.deserialize::<ParamMappingRecord>().into_iter()
+                csv_reader.deserialize::<ParamMappingRecord>().into_iter()
                     .map(|r| r.unwrap())
                     .map(|r| {
                         (r.param, r.name.clone())
