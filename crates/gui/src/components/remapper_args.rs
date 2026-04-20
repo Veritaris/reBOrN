@@ -71,13 +71,12 @@ pub fn remapper_args_block(ui: &mut egui::Ui, app: &mut App) {
                 ui.label(egui::RichText::new(localize("options.set_cache_dir")))
                     .on_hover_text(localize("options.set_cache_dir.tooltip"));
 
-                if ui.button("deobfuscation.select_cache_dir").clicked() {
-                    if let Some(cache_dir_folder) =
+                if ui.button("deobfuscation.select_cache_dir").clicked()
+                    && let Some(cache_dir_folder) =
                         rfd::FileDialog::new().set_directory(&app.set_cache_dir).pick_folder()
-                        && let Some(cache_dir) = cache_dir_folder.to_str()
-                    {
-                        app.set_cache_dir = cache_dir.to_string();
-                    }
+                    && let Some(cache_dir) = cache_dir_folder.to_str()
+                {
+                    app.set_cache_dir = cache_dir.to_string();
                 }
             });
 
@@ -85,6 +84,29 @@ pub fn remapper_args_block(ui: &mut egui::Ui, app: &mut App) {
                 ui.label(egui::RichText::new(localize("options.clean_cache_dir")))
                     .on_hover_text(localize("options.clean_cache_dir.tooltip"));
                 components::toggle_ui_compact(ui, &mut app.clean_cache_dir);
+            });
+
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new(localize("options.output_dir")))
+                    .on_hover_text(localize("options.output_dir.tooltip"));
+
+                if ui.button("options.output_dir").clicked() {
+                    let current_output_dir = {
+                        let guard = &app.args.lock().unwrap().output;
+                        match guard {
+                            None => "".to_string(),
+                            Some(it) => it.first().unwrap_or(&String::new()).to_string(),
+                        }
+                    };
+                    if let Some(cache_dir_folder) =
+                        rfd::FileDialog::new().set_directory(current_output_dir).pick_folder()
+                        && let Some(cache_dir) = cache_dir_folder.to_str()
+                    {
+                        let guard = &mut app.args.lock().unwrap();
+                        guard.output = Some(vec![cache_dir.to_string()]);
+                        // app.set_cache_dir = cache_dir.to_string();
+                    }
+                }
             });
 
             // packages_filter: vec![],

@@ -6,6 +6,7 @@ use egui::Ui;
 use mc_deobf::args::RebornCliArgs;
 use mc_deobf::mappings::DeobfMappingsType;
 use std::path::PathBuf;
+use std::sync::LockResult;
 use std::time::Duration;
 
 const JAR_SELECT_FILTERS: [components::file_select::SelectFileFilter; 2] = [
@@ -102,6 +103,16 @@ pub fn app_ready(ui: &mut Ui, ctx: &egui::Context, app: &mut App) {
                 .push(format!("params:file://{}", params_mappings_file.to_str().unwrap_or("")));
         }
 
+        let output = {
+            match app.args.lock() {
+                Ok(it) => it.output.clone(),
+                Err(err) => {
+                    eprintln!("Unable to lock app.args mutex {}", err);
+                    None
+                }
+            }
+        };
+
         let deobf_args = RebornCliArgs {
             input: input.clone(),
             verbose: app.verbose,
@@ -123,6 +134,7 @@ pub fn app_ready(ui: &mut Ui, ctx: &egui::Context, app: &mut App) {
             compress_resources: app.compress_resources,
             mappings_type: app.deobf_target_select_state,
             extra_mappings: custom_mappings_as_extra_mappings,
+            output,
             ..Default::default()
         };
         if !deobf_args.input.is_empty() {

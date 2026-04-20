@@ -5,6 +5,7 @@ use eframe::emath::Align;
 use eframe::epaint::Rgba;
 use egui_notify::{Anchor, Toasts};
 use linked_hash_map::LinkedHashMap;
+use mc_deobf::args::RebornCliArgs;
 pub(crate) use mc_deobf::mappings::{DeobfMappingsType, ModLoader};
 use std::collections::HashMap;
 use std::sync::mpsc::{Receiver, Sender};
@@ -57,6 +58,9 @@ pub struct App {
     pub(crate) strip_resources: bool,
     pub(crate) deflate_compress_level: i64,
     pub(crate) compress_resources: bool,
+
+    #[serde(skip)]
+    pub args: Arc<Mutex<RebornCliArgs>>,
 
     #[serde(skip)]
     pub(crate) extra_mappings_keys: Vec<String>,
@@ -129,7 +133,6 @@ impl Default for App {
             files_to_deobfuscate: Arc::new(Vec::<String>::default()),
             app_cache: Arc::new(Mutex::new(RebornCache::load())),
             state: Arc::new(Mutex::new(AppState::Started)),
-            // deobf_target_select_state: Arc::new(Mutex::new(DeobfTargetSelectState::VersionsJSON)),
             deobf_target_select_state: DeobfMappingsType::VersionsJSON,
             fields_file: None,
             methods_file: None,
@@ -137,6 +140,7 @@ impl Default for App {
             versions_file_exists: false,
             mappings_cache_exists: false,
             // remapping args
+            args: Arc::new(Mutex::new(Default::default())),
             verbose: 0,
             debug: false,
             print_class: false,
