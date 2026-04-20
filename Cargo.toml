@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/classfile", "crates/gui", "crates/tsrg_trie", "crates/utils"]
+members = ["crates/classfile", "crates/decompiler", "crates/gui", "crates/tsrg_trie", "crates/utils"]
 
 [workspace.package]
 authors = ["Georgii Imeshkenov <georgiiimesh@gmail.com>"]
@@ -21,9 +21,11 @@ jni = { version = "0.21.1", default-features = false }
 clap = { version = "4.5.17", features = ["derive"] }
 zip = { version = "2.2.0", default-features = false, features = ["deflate", "deflate-zopfli"] }
 serde = { version = "1.0.210", features = ["derive"] }
-colored = { version = "2.1.0" }
+colored = { version = "3.0.0" }
+indoc = { version = "2.0.6" }
+num_cpus = { version = "1.16.0" }
 
-classfile = { path = "crates/classfile" }
+classfile = { path = "crates/classfile", features = [] }
 gui = { path = "crates/gui" }
 utils = { path = "crates/utils" }
 tsrg_trie = { path = "crates/tsrg_trie" }

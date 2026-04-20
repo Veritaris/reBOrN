@@ -1,7 +1,5 @@
-use std::cell::RefCell;
 use std::fs::read_to_string;
 use std::path::Path;
-use std::rc::Rc;
 
 // parse tsrg -> apply mappings to parsed trie
 
@@ -12,20 +10,20 @@ struct TsrgTrie<'a> {
 }
 
 impl<'a> TsrgTrie<'a> {
+    #[allow(unused)]
     pub(crate) fn add_child(&mut self, child: TsrgTrie<'a>) {
         self.children.push(child);
     }
 
-    pub(crate) fn ensure_child(&mut self, child_key: &str) {
+    pub(crate) fn ensure_child(&mut self, child_key: &'a str) {
         // self.children.push(child);
-        if let Some(subtrie) = self.children.iter().find(|st| { st.key == child_key }) {
-
+        if let Some(_) = self.children.iter().find(|st| st.key == child_key) {
         } else {
             self.create_child(child_key);
         }
     }
 
-    pub(crate) fn create_child(&mut self, child_key: &str) {
+    pub(crate) fn create_child(&mut self, child_key: &'a str) {
         let node = TsrgTrie {
             children: Vec::new(),
             key: child_key,

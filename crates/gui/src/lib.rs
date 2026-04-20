@@ -1,4 +1,4 @@
-pub(crate) mod components;
-pub(crate) mod localisation;
 pub mod app;
 mod colors;
+pub(crate) mod components;
+pub(crate) mod localisation;

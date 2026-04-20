@@ -2,9 +2,12 @@
 
 use std::collections::HashMap;
 
+#[allow(unused)]
 const ru_RU: &[u8] = include_bytes!("../../../resources/localisation/ru_RU.lang");
+#[allow(unused)]
 const en_EU: &[u8] = include_bytes!("../../../resources/localisation/en_EU.lang");
 
+#[allow(unused)]
 type LocalesHashMap = HashMap<&'static str, HashMap<&'static str, &'static str>>;
 
 // pub fn get_locales() -> Box<&'static LocalesHashMap> {

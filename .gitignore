@@ -1,8 +1,11 @@
 /target
 /dist
-/.idea
 /crates/classfile/java_opcodes.html
-/jars/
+jars/
 *.app
 *.dmg
 __pycache__
+.idea
+.venv
+.python-version
+*.iml

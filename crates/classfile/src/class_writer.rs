@@ -2,14 +2,24 @@ use std::fs::File;
 use std::io::{BufWriter, Error, Write};
 
 use byteorder::{BigEndian, WriteBytesExt};
-use zip::{CompressionMethod, ZipWriter};
 use zip::write::SimpleFileOptions;
+use zip::{CompressionMethod, ZipWriter};
 
 use crate::classfile::ClassFile;
 
 impl ClassFile {
-    pub fn write(self, writer: &mut ZipWriter<BufWriter<File>>, filename: &str, compress_level: i64) -> Result<(), Error> {
-        writer.start_file(filename, SimpleFileOptions::default().compression_method(CompressionMethod::Deflated).compression_level(Some(compress_level)))?;
+    pub fn write(
+        self,
+        writer: &mut ZipWriter<BufWriter<File>>,
+        filename: &str,
+        compress_level: i64,
+    ) -> Result<(), Error> {
+        writer.start_file(
+            filename,
+            SimpleFileOptions::default()
+                .compression_method(CompressionMethod::Deflated)
+                .compression_level(Some(compress_level)),
+        )?;
         let data: Vec<u8> = self.try_into()?;
         writer.write(data.as_slice())?;
         Ok(())

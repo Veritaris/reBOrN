@@ -1,11 +1,11 @@
 use std::collections::HashMap;
-use std::sync::{Arc, mpsc, Mutex};
 use std::sync::mpsc::{Receiver, Sender};
+use std::sync::{mpsc, Arc, Mutex};
 
-use egui::{CollapsingHeader, SelectableLabel, Style, Ui, ViewportCommand, Visuals};
+use egui::{CollapsingHeader, SelectableLabel, Style, Ui, UiBuilder, ViewportCommand, Visuals};
 use linked_hash_map::LinkedHashMap;
 
-use utils::cache::{get_appdata_dir, get_cache_file_path, RebornCache};
+use utils::cache::{get_appdata_dir, RebornCache};
 
 use crate::components::toggle_ui_compact;
 use crate::localisation::localize;
@@ -64,7 +64,6 @@ impl Default for App {
     fn default() -> Self {
         let (tx, rx): (Sender<bool>, Receiver<bool>) = mpsc::channel();
 
-
         Self {
             cache_web_files: true,
             autoupdate_versions: true,
@@ -113,13 +112,7 @@ impl App {
             persist_window: true,
             ..Default::default()
         };
-        eframe::run_native(
-            APP_KEY,
-            options,
-            Box::new(|cc| {
-                Ok(Box::new(App::new(cc)))
-            }),
-        )
+        eframe::run_native(APP_KEY, options, Box::new(|cc| Ok(Box::new(App::new(cc)))))
     }
 
     fn ensure_versions_json(self: &mut App) {
@@ -179,7 +172,11 @@ impl App {
                 None => continue,
                 Some(key) => {
                     ui.add_sized([120.0, 16.0], egui::TextEdit::singleline(key).code_editor());
-                    ui.add_sized([240.0, 16.0], egui::TextEdit::singleline(self.extra_mappings_values.get_mut(i).unwrap()).code_editor());
+                    ui.add_sized(
+                        [240.0, 16.0],
+                        egui::TextEdit::singleline(self.extra_mappings_values.get_mut(i).unwrap())
+                            .code_editor(),
+                    );
                     if ui.add(egui::Button::new("remove")).clicked() {
                         self.extra_mappings_keys.remove(i);
                         self.extra_mappings_values.remove(i);
@@ -187,7 +184,7 @@ impl App {
                     ui.end_row();
                 }
             }
-        };
+        }
     }
 }
 
@@ -197,11 +194,27 @@ impl eframe::App for App {
             #[cfg(debug_assertions)]
             {
                 ui.horizontal(|ui| {
-                    ui.selectable_value(&mut *self.state.lock().unwrap(), AppState::Started, "Started");
-                    ui.selectable_value(&mut *self.state.lock().unwrap(), AppState::ValidatingCache, "ValidatingCache");
+                    ui.selectable_value(
+                        &mut *self.state.lock().unwrap(),
+                        AppState::Started,
+                        "Started",
+                    );
+                    ui.selectable_value(
+                        &mut *self.state.lock().unwrap(),
+                        AppState::ValidatingCache,
+                        "ValidatingCache",
+                    );
                     ui.selectable_value(&mut *self.state.lock().unwrap(), AppState::Ready, "Ready");
-                    ui.selectable_value(&mut *self.state.lock().unwrap(), AppState::DownloadingMappings, "DownloadingMappings");
-                    ui.selectable_value(&mut *self.state.lock().unwrap(), AppState::Deobfuscating, "Deobfuscating");
+                    ui.selectable_value(
+                        &mut *self.state.lock().unwrap(),
+                        AppState::DownloadingMappings,
+                        "DownloadingMappings",
+                    );
+                    ui.selectable_value(
+                        &mut *self.state.lock().unwrap(),
+                        AppState::Deobfuscating,
+                        "Deobfuscating",
+                    );
                 });
             }
 
@@ -213,9 +226,7 @@ impl eframe::App for App {
 
             let app_state = *self.state.lock().unwrap();
             match app_state {
-                AppState::Started => {
-                    self.ensure_versions_json()
-                }
+                AppState::Started => self.ensure_versions_json(),
                 AppState::ValidatingCache => {
                     ui.horizontal_centered(|ui| {
                         ui.vertical_centered_justified(|ui| {
@@ -235,109 +246,172 @@ impl eframe::App for App {
                         toggle_ui_compact(ui, &mut self.cache_web_files);
                     });
 
-                    CollapsingHeader::new(localize("deobfuscation.remap_from")).default_open(false).show_unindented(ui, |ui| {
-                        ui.visuals_mut().indent_has_left_vline = false;
-                        ui.indent(ui.id(), |ui| {
-                            ui.vertical_centered_justified(|ui| {
-                                ui.label("WIP, sorry")
+                    CollapsingHeader::new(localize("deobfuscation.remap_from"))
+                        .default_open(false)
+                        .show_unindented(ui, |ui| {
+                            ui.visuals_mut().indent_has_left_vline = false;
+                            ui.indent(ui.id(), |ui| {
+                                ui.vertical_centered_justified(|ui| ui.label("WIP, sorry"));
                             });
                         });
-                    });
 
-                    CollapsingHeader::new(localize("deobfuscation.remap_to")).default_open(true).show_unindented(ui, |ui| {
-                        ui.visuals_mut().indent_has_left_vline = false;
-                        ui.indent(ui.id(), |ui| {
-                            ui.horizontal(|ui| {
-                                ui.vertical(|ui| {
-                                    let label = ui.label(localize("Version"));
-                                    let selector_text = self.last_used_version.clone().unwrap_or_default();
-                                    egui::ComboBox::from_id_source(label.id)
-                                        .selected_text(selector_text)
-                                        .show_ui(ui, |ui| {
-                                            let versions_json = self.versions_json.lock().unwrap();
+                    CollapsingHeader::new(localize("deobfuscation.remap_to"))
+                        .default_open(true)
+                        .show_unindented(ui, |ui| {
+                            ui.visuals_mut().indent_has_left_vline = false;
+                            ui.indent(ui.id(), |ui| {
+                                ui.horizontal(|ui| {
+                                    ui.vertical(|ui| {
+                                        let label = ui.label(localize("Version"));
+                                        let selector_text =
+                                            self.last_used_version.clone().unwrap_or_default();
+                                        egui::ComboBox::from_id_salt(label.id)
+                                            .selected_text(selector_text)
+                                            .show_ui(ui, |ui| {
+                                                let versions_json =
+                                                    self.versions_json.lock().unwrap();
 
-                                            for (version, channels) in &*versions_json {
-                                                let combobox = ui.add(SelectableLabel::new(self.last_used_version.as_ref() == Some(version), version));
-                                                if combobox.clicked() && self.last_used_version.as_ref() != Some(&version) {
-                                                    self.last_used_version = Some(version.clone());
-                                                    self.last_used_channel = match channels.keys().next() {
-                                                        None => None,
-                                                        Some(channel) => {
-                                                            self.last_used_mapping_version = match channels.get(channel).unwrap().first() {
+                                                for (version, channels) in &*versions_json {
+                                                    let combobox = ui.add(SelectableLabel::new(
+                                                        self.last_used_version.as_ref()
+                                                            == Some(version),
+                                                        version,
+                                                    ));
+                                                    if combobox.clicked()
+                                                        && self.last_used_version.as_ref()
+                                                            != Some(&version)
+                                                    {
+                                                        self.last_used_version =
+                                                            Some(version.clone());
+                                                        self.last_used_channel =
+                                                            match channels.keys().next() {
                                                                 None => None,
-                                                                Some(map_version) => Some(map_version.clone())
+                                                                Some(channel) => {
+                                                                    self.last_used_mapping_version =
+                                                                    match channels
+                                                                        .get(channel)
+                                                                        .unwrap()
+                                                                        .first()
+                                                                    {
+                                                                        None => None,
+                                                                        Some(map_version) => Some(
+                                                                            map_version.clone(),
+                                                                        ),
+                                                                    };
+                                                                    Some(channel.clone())
+                                                                }
                                                             };
-                                                            Some(channel.clone())
-                                                        }
-                                                    };
+                                                    }
                                                 }
-                                            }
-                                        });
-                                });
-
-                                ui.vertical(|ui| {
-                                    let label = ui.label(localize("Channel"));
-                                    let selector_text = self.last_used_channel.clone().unwrap_or_default();
-                                    egui::ComboBox::from_id_source(label.id)
-                                        .selected_text(selector_text)
-                                        .show_ui(ui, |ui| {
-                                            let versions_json = self.versions_json.lock().unwrap();
-                                            let version = &self.last_used_version.clone().unwrap_or_default();
-                                            let default_channels = &HashMap::<String, Vec<String>>::new();
-
-                                            let channels = &*versions_json
-                                                .get(version).unwrap_or(default_channels);
-
-                                            for (channel, versions) in channels {
-                                                let combobox = ui.add(SelectableLabel::new(self.last_used_channel.as_ref() == Some(channel), channel));
-                                                if combobox.clicked() && self.last_used_channel.as_ref() != Some(channel) {
-                                                    self.last_used_channel = Some(channel.clone());
-                                                    let version = versions.first().unwrap_or(&"".to_string()).clone();
-                                                    self.last_used_mapping_version = Some(version)
-                                                }
-                                            }
-                                        });
-                                });
-
-                                ui.vertical(|ui| {
-                                    let label = ui.label(localize("MapVersion"));
-                                    let selector_text = self.last_used_mapping_version.clone().unwrap_or_default();
-                                    egui::ComboBox::from_id_source(label.id)
-                                        .selected_text(selector_text)
-                                        .show_ui(ui, |ui| {
-                                            let versions_json = self.versions_json.lock().unwrap();
-                                            let default_channels = &HashMap::<String, Vec<String>>::new();
-                                            let default_map_versions = Vec::<String>::new();
-                                            let version = &self.last_used_version.clone().unwrap_or_default();
-                                            let channel = &self.last_used_channel.clone().unwrap_or_default();
-
-                                            let map_versions = &*versions_json
-                                                .get(version).unwrap_or(default_channels)
-                                                .get(channel).unwrap_or(&default_map_versions);
-
-                                            for map_ver in map_versions {
-                                                ui.selectable_value(&mut self.last_used_mapping_version, Some(map_ver.clone()), map_ver);
-                                            }
-                                        });
-                                });
-
-                                ui.vertical(|ui| {
-                                    ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
-                                        self.mappings_download_button(ui);
+                                            });
                                     });
-                                });
-                                
-                                ui.vertical(|ui| {
-                                    ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
-                                        // self.mappings_download_button(ui);
-                                        if ui.button("Open folder").clicked() {
-                                            utils::utils::open_explorer(get_appdata_dir().cache_dir());
-                                        };
+
+                                    ui.vertical(|ui| {
+                                        let label = ui.label(localize("Channel"));
+                                        let selector_text =
+                                            self.last_used_channel.clone().unwrap_or_default();
+                                        egui::ComboBox::from_id_salt(label.id)
+                                            .selected_text(selector_text)
+                                            .show_ui(ui, |ui| {
+                                                let versions_json =
+                                                    self.versions_json.lock().unwrap();
+                                                let version = &self
+                                                    .last_used_version
+                                                    .clone()
+                                                    .unwrap_or_default();
+                                                let default_channels =
+                                                    &HashMap::<String, Vec<String>>::new();
+
+                                                let channels = &*versions_json
+                                                    .get(version)
+                                                    .unwrap_or(default_channels);
+
+                                                for (channel, versions) in channels {
+                                                    let combobox = ui.add(SelectableLabel::new(
+                                                        self.last_used_channel.as_ref()
+                                                            == Some(channel),
+                                                        channel,
+                                                    ));
+                                                    if combobox.clicked()
+                                                        && self.last_used_channel.as_ref()
+                                                            != Some(channel)
+                                                    {
+                                                        self.last_used_channel =
+                                                            Some(channel.clone());
+                                                        let version = versions
+                                                            .first()
+                                                            .unwrap_or(&"".to_string())
+                                                            .clone();
+                                                        self.last_used_mapping_version =
+                                                            Some(version)
+                                                    }
+                                                }
+                                            });
+                                    });
+
+                                    ui.vertical(|ui| {
+                                        let label = ui.label(localize("MapVersion"));
+                                        let selector_text = self
+                                            .last_used_mapping_version
+                                            .clone()
+                                            .unwrap_or_default();
+                                        egui::ComboBox::from_id_salt(label.id)
+                                            .selected_text(selector_text)
+                                            .show_ui(ui, |ui| {
+                                                let versions_json =
+                                                    self.versions_json.lock().unwrap();
+                                                let default_channels =
+                                                    &HashMap::<String, Vec<String>>::new();
+                                                let default_map_versions = Vec::<String>::new();
+                                                let version = &self
+                                                    .last_used_version
+                                                    .clone()
+                                                    .unwrap_or_default();
+                                                let channel = &self
+                                                    .last_used_channel
+                                                    .clone()
+                                                    .unwrap_or_default();
+                                                let map_versions = versions_json
+                                                    .get(version)
+                                                    .unwrap_or(default_channels)
+                                                    .get(channel)
+                                                    .unwrap_or(&default_map_versions);
+
+                                                for map_ver in map_versions {
+                                                    ui.selectable_value(
+                                                        &mut self.last_used_mapping_version,
+                                                        Some(map_ver.clone()),
+                                                        map_ver,
+                                                    );
+                                                }
+                                            });
+                                    });
+
+                                    ui.vertical(|ui| {
+                                        ui.with_layout(
+                                            egui::Layout::bottom_up(egui::Align::LEFT),
+                                            |ui| {
+                                                self.mappings_download_button(ui);
+                                            },
+                                        );
+                                    });
+
+                                    ui.vertical(|ui| {
+                                        ui.with_layout(
+                                            egui::Layout::bottom_up(egui::Align::LEFT),
+                                            |ui| {
+                                                // self.mappings_download_button(ui);
+                                                if ui.button("Open folder").clicked() {
+                                                    utils::utils::open_explorer(
+                                                        get_appdata_dir().cache_dir(),
+                                                    );
+                                                };
+                                            },
+                                        );
                                     });
                                 });
                             });
                         });
-                    });
 
                     ui.label(localize("deobfuscation.extra_mappings"));
 
@@ -373,7 +447,11 @@ impl eframe::App for App {
                     // }
 
                     if self.extra_mappings_keys.is_empty()
-                        || (self.extra_mappings_keys.last().unwrap_or(&"".to_string()) != &"".to_string() && self.extra_mappings_values.last().unwrap_or(&"".to_string()) != &"".to_string()) {
+                        || (self.extra_mappings_keys.last().unwrap_or(&"".to_string())
+                            != &"".to_string()
+                            && self.extra_mappings_values.last().unwrap_or(&"".to_string())
+                                != &"".to_string())
+                    {
                         self.extra_mappings_keys.push("".to_string());
                         self.extra_mappings_values.push("".to_string());
                     }
@@ -394,37 +472,46 @@ impl eframe::App for App {
 fn window_frame(ctx: &egui::Context, title: &str, add_contents: impl FnOnce(&mut egui::Ui)) {
     let panel_frame = egui::Frame {
         fill: ctx.style().visuals.window_fill(),
-        rounding: 10.0.into(),
+        corner_radius: 10.0.into(),
         stroke: ctx.style().visuals.widgets.noninteractive.fg_stroke,
         outer_margin: 0.5.into(),
         ..Default::default()
     };
 
-    egui::CentralPanel::default().frame(panel_frame).show(ctx, |ui| {
-        let app_rect = ui.max_rect();
+    egui::CentralPanel::default()
+        .frame(panel_frame)
+        .show(ctx, |ui| {
+            let app_rect = ui.max_rect();
 
-        let title_bar_height = 32.0;
-        let title_bar_rect = {
-            let mut rect = app_rect;
-            rect.max.y = rect.min.y + title_bar_height;
-            rect
-        };
-        title_bar_ui(ui, title_bar_rect, title);
+            let title_bar_height = 32.0;
+            let title_bar_rect = {
+                let mut rect = app_rect;
+                rect.max.y = rect.min.y + title_bar_height;
+                rect
+            };
+            title_bar_ui(ui, title_bar_rect, title);
 
-        let content_rect = {
-            let mut rect = app_rect;
-            rect.min.y = title_bar_rect.max.y;
-            rect
-        }.shrink(4.0);
-        let mut content_ui = ui.child_ui(content_rect, *ui.layout(), None);
-        add_contents(&mut content_ui);
-    });
+            let content_rect = {
+                let mut rect = app_rect;
+                rect.min.y = title_bar_rect.max.y;
+                rect
+            }
+            .shrink(4.0);
+
+            let mut content_ui =
+                ui.new_child(UiBuilder::new().max_rect(content_rect).layout(*ui.layout()));
+            add_contents(&mut content_ui);
+        });
 }
 
 fn title_bar_ui(ui: &mut egui::Ui, title_bar_rect: eframe::epaint::Rect, title: &str) {
     let painter = ui.painter();
 
-    let title_bar_response = ui.interact(title_bar_rect, egui::Id::new("title_bar"), egui::Sense::click());
+    let title_bar_response = ui.interact(
+        title_bar_rect,
+        egui::Id::new("title_bar"),
+        egui::Sense::click(),
+    );
 
     painter.text(
         title_bar_rect.center(),
@@ -444,14 +531,14 @@ fn title_bar_ui(ui: &mut egui::Ui, title_bar_rect: eframe::epaint::Rect, title: 
 
     if title_bar_response.double_clicked() {
         let is_maximized = ui.input(|i| i.viewport().maximized.unwrap_or(false));
-        ui.ctx().send_viewport_cmd(ViewportCommand::Maximized(!is_maximized));
+        ui.ctx()
+            .send_viewport_cmd(ViewportCommand::Maximized(!is_maximized));
     }
 
     if title_bar_response.is_pointer_button_down_on() {
         ui.ctx().send_viewport_cmd(ViewportCommand::StartDrag);
     }
-
-    ui.allocate_ui_at_rect(title_bar_rect, |ui| {
+    ui.allocate_new_ui(UiBuilder::new().max_rect(title_bar_rect), |ui| {
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             ui.spacing_mut().item_spacing.x = 0.0;
             ui.visuals_mut().button_frame = false;
@@ -464,7 +551,9 @@ fn title_bar_ui(ui: &mut egui::Ui, title_bar_rect: eframe::epaint::Rect, title: 
 fn close_maximize_minimize(ui: &mut egui::Ui) {
     let button_height = 16.0;
     let close_response = ui
-        .add(egui::Button::new(egui::RichText::new("❌").size(button_height)))
+        .add(egui::Button::new(
+            egui::RichText::new("❌").size(button_height),
+        ))
         .on_hover_text("Close the window");
     if close_response.clicked() {
         ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
@@ -473,7 +562,9 @@ fn close_maximize_minimize(ui: &mut egui::Ui) {
     let is_maximized = ui.input(|i| i.viewport().maximized.unwrap_or(false));
     if is_maximized {
         let maximized_response = ui
-            .add(egui::Button::new(egui::RichText::new("🗗").size(button_height)))
+            .add(egui::Button::new(
+                egui::RichText::new("🗗").size(button_height),
+            ))
             .on_hover_text("Restore window");
         if maximized_response.clicked() {
             ui.ctx()
@@ -481,7 +572,9 @@ fn close_maximize_minimize(ui: &mut egui::Ui) {
         }
     } else {
         let maximized_response = ui
-            .add(egui::Button::new(egui::RichText::new("🗗").size(button_height)))
+            .add(egui::Button::new(
+                egui::RichText::new("🗗").size(button_height),
+            ))
             .on_hover_text("Maximize window");
         if maximized_response.clicked() {
             ui.ctx().send_viewport_cmd(ViewportCommand::Maximized(true));
@@ -489,10 +582,12 @@ fn close_maximize_minimize(ui: &mut egui::Ui) {
     }
 
     let minimized_response = ui
-        .add(egui::Button::new(egui::RichText::new("🗕").size(button_height)))
+        .add(egui::Button::new(
+            egui::RichText::new("🗕").size(button_height),
+        ))
         .on_hover_text("Minimize the window");
     if minimized_response.clicked() {
         ui.ctx().send_viewport_cmd(ViewportCommand::Minimized(true));
     }
-    egui::global_dark_light_mode_switch(ui);
+    egui::global_theme_preference_switch(ui);
 }

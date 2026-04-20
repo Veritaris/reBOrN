@@ -1,7 +1,7 @@
-use clap::Parser;
 use crate::mappings::ModLoader;
+use clap::Parser;
 
-#[derive(Parser)]
+#[derive(Parser, Clone, Debug)]
 #[command(version, about, long_about = None)]
 pub struct RebornCliArgs {
     #[arg(
@@ -13,11 +13,7 @@ effect as 3\n"
     )]
     pub verbose: u8,
 
-    #[arg(
-        long,
-        default_value = "false",
-        help = "Enable debug output\n"
-    )]
+    #[arg(long, default_value = "false", help = "Enable debug output\n")]
     pub debug: bool,
 
     #[arg(
@@ -66,11 +62,7 @@ old versions, 'official' and 'parchment' on modern versions of Forge\n"
     )]
     pub mappings_channel: String,
 
-    #[arg(
-        long,
-        help = "Mappings version",
-        default_value = "12"
-    )]
+    #[arg(long, help = "Mappings version", default_value = "12")]
     pub mappings_version: String,
 
     #[arg(
@@ -104,7 +96,7 @@ Possible sources:
         Also see --cache-dir and --set-cached-dir options\n"
     )]
     pub cache_web_files: bool,
-    
+
     #[arg(
         long,
         default_value = "false",
@@ -126,10 +118,7 @@ Possible sources:
     )]
     pub set_cache_dir: String,
 
-    #[arg(
-        long,
-        help = "Clean cache dir\n"
-    )]
+    #[arg(long, help = "Clean cache dir\n")]
     pub clean_cache_dir: bool,
 
     #[arg(
@@ -190,11 +179,7 @@ option if you want to compress\n"
     )]
     pub no_deobf: bool,
 
-    #[arg(
-        long,
-        default_value = "false",
-        help = "Show deobf progress\n"
-    )]
+    #[arg(long, default_value = "false", help = "Show deobf progress\n")]
     pub progress: bool,
 
     #[arg(

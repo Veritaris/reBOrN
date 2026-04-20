@@ -1,111 +1,160 @@
-use std::io::{BufReader, Error, ErrorKind, Read, Seek};
 use byteorder::{BigEndian, ReadBytesExt};
 use linked_hash_map::LinkedHashMap;
-use zip::read::ZipFile;
+use std::io::{BufReader, Error, ErrorKind, Read, Seek};
 
 use crate::access_flags::{AccessFlagContext, AccessFlags};
 use crate::attributes::*;
 use crate::classfile::*;
-use crate::constant_pool_tag::{ConstantPoolJvmTag, ConstantPoolTags, CONTINUATION_TAG};
+use crate::constant_pool_tag::{ConstantPoolJvmTag, ConstantPoolTag, CONTINUATION_TAG};
 use crate::field::Field;
 use crate::method::Method;
+use crate::mutf8::read_modified_utf8;
 use crate::type_alias;
 
 impl<'a, 'b> ClassFile
 where
     'b: 'a,
 {
-    pub fn tag_to_display(&self, tag: &ConstantPoolTags) -> String {
+    pub fn tag_to_display(&self, tag: &ConstantPoolTag) -> String {
         match tag {
-            ConstantPoolTags::Utf8 { bytes, length, .. } => {
-                let bytes_stringified = match cesu8::from_java_cesu8(bytes.as_ref()) {
-                    Ok(res) => res.to_string(),
+            ConstantPoolTag::Utf8 { bytes, length, .. } => {
+                let bytes_stringified = match read_modified_utf8(&bytes) {
+                    Ok(res) => res,
                     Err(err) => {
                         eprintln!("[TagDisplayError]: err={}, raw data: {:?}", err, bytes);
                         String::from("<error>")
                     }
                 };
-                format!("Utf8<length={}, bytes='{:?}', stringified='{}'>", length, bytes.clone(), bytes_stringified.clone())
+                format!(
+                    "Utf8<length={}, bytes='{:?}', stringified='{}'>",
+                    length,
+                    bytes.clone(),
+                    bytes_stringified.clone()
+                )
             }
-            ConstantPoolTags::Integer { _value, .. } => {
+            ConstantPoolTag::Integer { _value, .. } => {
                 format!("Integer<value={}>", _value)
             }
-            ConstantPoolTags::Float { _value, .. } => {
+            ConstantPoolTag::Float { _value, .. } => {
                 format!("Float<value={}>", _value)
             }
-            ConstantPoolTags::Long { _value, .. } => {
+            ConstantPoolTag::Long { _value, .. } => {
                 format!("Long<value={}>", _value)
             }
-            ConstantPoolTags::Double { _value, .. } => {
+            ConstantPoolTag::Double { _value, .. } => {
                 format!("Double<value={}>", _value)
             }
-            ConstantPoolTags::Class { name_index, .. } => {
+            ConstantPoolTag::Class { name_index, .. } => {
                 let val = self.constant_pool.get(*name_index as usize).unwrap();
-                format!("Class<name_index={}, content={}>", name_index, self.tag_to_display(val))
+                format!(
+                    "Class<name_index={}, content={}>",
+                    name_index,
+                    self.tag_to_display(val)
+                )
             }
-            ConstantPoolTags::String { string_index, .. } => {
+            ConstantPoolTag::String { string_index, .. } => {
                 let val = self.constant_pool.get(*string_index as usize).unwrap();
-                format!("String<string_index={}, content={}>", string_index, self.tag_to_display(val))
+                format!(
+                    "String<string_index={}, content={}>",
+                    string_index,
+                    self.tag_to_display(val)
+                )
             }
-            ConstantPoolTags::Fieldref { class_index, name_and_type_index, .. } => {
+            ConstantPoolTag::Fieldref {
+                class_index,
+                name_and_type_index,
+                ..
+            } => {
                 let class = self.constant_pool.get(*class_index as usize).unwrap();
-                let name_and_type = self.constant_pool.get(*name_and_type_index as usize).unwrap();
-                format!("FieldRef<class={}, name_and_type={}>", self.tag_to_display(class), self.tag_to_display(name_and_type))
+                let name_and_type = self
+                    .constant_pool
+                    .get(*name_and_type_index as usize)
+                    .unwrap();
+                format!(
+                    "FieldRef<class={}, name_and_type={}>",
+                    self.tag_to_display(class),
+                    self.tag_to_display(name_and_type)
+                )
             }
-            ConstantPoolTags::Methodref { class_index, name_and_type_index, .. } => {
+            ConstantPoolTag::Methodref {
+                class_index,
+                name_and_type_index,
+                ..
+            } => {
                 let class = self.constant_pool.get(*class_index as usize).unwrap();
-                let name_and_type = self.constant_pool.get(*name_and_type_index as usize).unwrap();
-                format!("MethodRef<class={}, name_and_type={}>", self.tag_to_display(class), self.tag_to_display(name_and_type))
+                let name_and_type = self
+                    .constant_pool
+                    .get(*name_and_type_index as usize)
+                    .unwrap();
+                format!(
+                    "MethodRef<class={}, name_and_type={}>",
+                    self.tag_to_display(class),
+                    self.tag_to_display(name_and_type)
+                )
             }
-            ConstantPoolTags::InterfaceMethodref { class_index, name_and_type_index, .. } => {
+            ConstantPoolTag::InterfaceMethodref {
+                class_index,
+                name_and_type_index,
+                ..
+            } => {
                 let class = self.constant_pool.get(*class_index as usize).unwrap();
-                let name_and_type = self.constant_pool.get(*name_and_type_index as usize).unwrap();
-                format!("InterfaceMethodRef<class={}, name_and_type={}>", self.tag_to_display(class), self.tag_to_display(name_and_type))
+                let name_and_type = self
+                    .constant_pool
+                    .get(*name_and_type_index as usize)
+                    .unwrap();
+                format!(
+                    "InterfaceMethodRef<class={}, name_and_type={}>",
+                    self.tag_to_display(class),
+                    self.tag_to_display(name_and_type)
+                )
             }
-            ConstantPoolTags::NameAndType { name_index, descriptor_index, .. } => {
+            ConstantPoolTag::NameAndType {
+                name_index,
+                descriptor_index,
+                ..
+            } => {
                 let name = self.constant_pool.get(*name_index as usize).unwrap();
                 let descriptor = self.constant_pool.get(*descriptor_index as usize).unwrap();
-                format!("NameAndType<name={}, descriptor={}>", self.tag_to_display(name), self.tag_to_display(descriptor))
+                format!(
+                    "NameAndType<name={}, descriptor={}>",
+                    self.tag_to_display(name),
+                    self.tag_to_display(descriptor)
+                )
             }
-            ConstantPoolTags::MethodHandle { .. } => {
-                String::from("MethodHandle<TODO>")
-            }
-            ConstantPoolTags::MethodType { .. } => {
-                String::from("MethodType<TODO>")
-            }
-            ConstantPoolTags::Dynamic { .. } => {
-                String::from("Dynamic<TODO>")
-            }
-            ConstantPoolTags::InvokeDynamic { .. } => {
-                String::from("InvokeDynamic<TODO>")
-            }
-            ConstantPoolTags::Module { name_index, .. } => {
+            ConstantPoolTag::MethodHandle { .. } => String::from("MethodHandle<TODO>"),
+            ConstantPoolTag::MethodType { .. } => String::from("MethodType<TODO>"),
+            ConstantPoolTag::Dynamic { .. } => String::from("Dynamic<TODO>"),
+            ConstantPoolTag::InvokeDynamic { .. } => String::from("InvokeDynamic<TODO>"),
+            ConstantPoolTag::Module { name_index, .. } => {
                 format!("Module<name={}>", self.get_string_from_cpool(*name_index))
             }
-            ConstantPoolTags::Package { name_index, .. } => {
+            ConstantPoolTag::Package { name_index, .. } => {
                 format!("Module<name={}>", self.get_string_from_cpool(*name_index))
             }
-            ConstantPoolTags::ContinuationTag { .. } => {
-                String::from("ContinuationTag")
-            }
+            ConstantPoolTag::ContinuationTag { .. } => String::from("ContinuationTag"),
         }
     }
 
     pub fn class_name_from_cp(&self) -> String {
         match self.constant_pool.get(self.this_class as usize) {
-            Some(ConstantPoolTags::Class { name_index, .. }) => {
+            Some(ConstantPoolTag::Class { name_index, .. }) => {
                 match self.constant_pool.get(*name_index as usize) {
-                    Some(ConstantPoolTags::Utf8 { bytes, .. }) => String::from_utf8(bytes.clone()).unwrap(),
-                    _ => String::new()
+                    Some(ConstantPoolTag::Utf8 { bytes, .. }) => {
+                        String::from_utf8(bytes.clone()).unwrap()
+                    }
+                    _ => String::new(),
                 }
             }
-            _ => String::new()
+            _ => String::new(),
         }
     }
 
-    pub fn read<R>(len: u64, mut buff: BufReader<R>, mappings: Option<&LinkedHashMap<String, String>>) -> Result<ClassFile, Error>
+    pub fn read<R>(
+        mut buff: BufReader<R>,
+        mappings: Option<&LinkedHashMap<String, String>>,
+    ) -> Result<ClassFile, Error>
     where
-        R: Read,
+        R: Read + Seek,
     {
         let magic = buff.read_u32::<BigEndian>()?;
         if magic != CLASS_HEADER {
@@ -115,53 +164,171 @@ where
         let minor_version = buff.read_u16::<BigEndian>()?;
         let major_version = buff.read_u16::<BigEndian>()?;
         let constant_pool_count = buff.read_u16::<BigEndian>()?;
-        let mut constant_pool: Vec<ConstantPoolTags> = Vec::with_capacity(constant_pool_count as usize);
+        let mut constant_pool: Vec<ConstantPoolTag> =
+            Vec::with_capacity(constant_pool_count as usize);
         constant_pool.push(CONTINUATION_TAG);
+        let mut read_bytes = buff.stream_position().unwrap_or(10);
 
+        #[cfg(feature = "debug-logging")]
+        {
+            println!("    Reading tags");
+        }
         let mut cp_index = 1;
         while cp_index < constant_pool_count {
             match ClassFile::read_tag(&mut buff, mappings) {
                 Ok(tag) => {
+                    #[cfg(feature = "debug-logging")]
+                    println!(
+                        "#{} tag {:?} at {}(0x{:x}) position",
+                        cp_index, tag, read_bytes, read_bytes
+                    );
                     match tag {
-                        ConstantPoolTags::Long { .. } | ConstantPoolTags::Double { .. } => {
+                        ConstantPoolTag::Long { .. } | ConstantPoolTag::Double { .. } => {
                             constant_pool.push(tag);
                             constant_pool.push(CONTINUATION_TAG);
                             cp_index += 1;
                         }
-                        _ => constant_pool.push(tag)
+                        _ => constant_pool.push(tag),
                     };
+                    read_bytes = buff
+                        .stream_position()
+                        .expect("error while fetching buffer position");
                 }
                 Err(err) => {
-                    println!("skipping error tag at {}th iter: {}", cp_index, err)
+                    println!(
+                        "skipping error tag at {}th iter: {} and pushing continuation tag; offset: {}",
+                        cp_index, err, read_bytes
+                    );
+                    constant_pool.push(CONTINUATION_TAG);
                 }
             };
             cp_index += 1;
         }
 
-        let access_flags = AccessFlags::from((AccessFlagContext::Class, buff.read_u16::<BigEndian>()?));
+        #[cfg(feature = "debug-logging")]
+        {
+            let read_bytes = buff.stream_position().expect(
+                format!(
+                    "unexpected EOF after, previous success position: {}",
+                    read_bytes
+                )
+                .as_str(),
+            );
+            println!(
+                "    Reading class access flags at {} (0x{:x})",
+                read_bytes, read_bytes
+            );
+        }
+        let access_flags =
+            AccessFlags::from((AccessFlagContext::Class, buff.read_u16::<BigEndian>()?));
+        #[cfg(feature = "debug-logging")]
+        {
+            let read_bytes = buff.stream_position().expect(
+                format!(
+                    "unexpected EOF after, previous success position: {}",
+                    read_bytes
+                )
+                .as_str(),
+            );
+            println!(
+                "    Reading this class at {} (0x{:x})",
+                read_bytes, read_bytes
+            );
+        }
         let this_class = buff.read_u16::<BigEndian>()?;
+        #[cfg(feature = "debug-logging")]
+        {
+            let read_bytes = buff.stream_position().expect(
+                format!(
+                    "unexpected EOF after, previous success position: {}",
+                    read_bytes
+                )
+                .as_str(),
+            );
+            println!(
+                "    Reading super class at {} (0x{:x})",
+                read_bytes, read_bytes
+            );
+        }
         let super_class = buff.read_u16::<BigEndian>()?;
 
+        #[cfg(feature = "debug-logging")]
+        {
+            let read_bytes = buff.stream_position().expect(
+                format!(
+                    "unexpected EOF after, previous success position: {}",
+                    read_bytes
+                )
+                .as_str(),
+            );
+            println!(
+                "    Reading interfaces at {} (0x{:x})",
+                read_bytes, read_bytes
+            );
+        }
         let interfaces_count = buff.read_u16::<BigEndian>()?;
         let mut interfaces: Vec<type_alias::u2> = Vec::with_capacity(interfaces_count as usize);
         for _ in 0..interfaces_count {
             interfaces.push(buff.read_u16::<BigEndian>()?);
         }
 
+        #[cfg(feature = "debug-logging")]
+        {
+            let read_bytes = buff.stream_position().expect(
+                format!(
+                    "unexpected EOF after, previous success position: {}",
+                    read_bytes
+                )
+                .as_str(),
+            );
+            println!("    Reading fields at {} (0x{:x})", read_bytes, read_bytes);
+        }
         let fields_count = buff.read_u16::<BigEndian>()?;
         let mut fields: Vec<Field> = Vec::with_capacity(fields_count as usize);
         for _ in 0..fields_count {
             fields.push(Self::read_field(&constant_pool, &mut buff)?);
         }
 
+        #[cfg(feature = "debug-logging")]
+        {
+            let read_bytes = buff.stream_position().expect(
+                format!(
+                    "unexpected EOF after, previous success position: {}",
+                    read_bytes
+                )
+                .as_str(),
+            );
+            println!("    Reading methods at {} (0x{:x})", read_bytes, read_bytes);
+        }
         let methods_count = buff.read_u16::<BigEndian>()?;
         let mut methods: Vec<Method> = Vec::with_capacity(methods_count as usize);
         for _ in 0..methods_count {
             methods.push(Self::read_method(&constant_pool, &mut buff)?);
         }
 
+        #[cfg(feature = "debug-logging")]
+        {
+            let read_bytes = buff.stream_position().expect(
+                format!(
+                    "unexpected EOF after, previous success position: {}",
+                    read_bytes
+                )
+                .as_str(),
+            );
+            println!(
+                "    Reading attributes at {} (0x{:x})",
+                read_bytes, read_bytes
+            );
+        }
         let attributes_count = buff.read_u16::<BigEndian>()?;
-        let attributes: Vec<Attribute> = Self::read_attributes_vec(attributes_count, &constant_pool, &mut buff);
+        let attributes: Vec<Attribute> =
+            Self::read_attributes_vec(attributes_count, &constant_pool, &mut buff);
+
+        let len = buff.stream_position().unwrap_or(0);
+        #[cfg(feature = "debug-logging")]
+        {
+            println!("read {} bytes", len);
+        }
 
         Ok(ClassFile {
             magic,
@@ -185,7 +352,6 @@ where
         })
     }
 
-
     ///```javadoc
     /// field_info {
     ///     type_alias::u2             access_flags;
@@ -197,13 +363,23 @@ where
     ///```
     /// Oracle docs: https://docs.oracle.com/javase/specs/jvms/se22/html/jvms-4.html#jvms-4.5
     ///
-    fn read_field<R>(constant_pool: &Vec<ConstantPoolTags>, buff: &mut BufReader<R>) -> Result<Field, Error>
-    where R: Read {
+    fn read_field<R>(
+        constant_pool: &Vec<ConstantPoolTag>,
+        buff: &mut BufReader<R>,
+    ) -> Result<Field, Error>
+    where
+        R: Read + Seek,
+    {
         let access_flags: type_alias::u2 = buff.read_u16::<BigEndian>()?;
         let name_index: type_alias::u2 = buff.read_u16::<BigEndian>()?;
         let descriptor_index: type_alias::u2 = buff.read_u16::<BigEndian>()?;
         let attributes_count: type_alias::u2 = buff.read_u16::<BigEndian>()?;
-        let attributes: Vec<Attribute> = Self::read_attributes_vec(attributes_count, &constant_pool, buff);
+        #[cfg(feature = "debug-logging")]
+        {
+            println!("    Reading field attributes");
+        }
+        let attributes: Vec<Attribute> =
+            Self::read_attributes_vec(attributes_count, &constant_pool, buff);
 
         Ok(Field {
             access_flags,
@@ -225,13 +401,24 @@ where
     ///```
     /// Oracle docs: https://docs.oracle.com/javase/specs/jvms/se22/html/jvms-4.html#jvms-4.6
     ///
-    fn read_method<R>(constant_pool: &Vec<ConstantPoolTags>, buff: &mut BufReader<R>) -> Result<Method, Error>
-    where R: Read {
+    fn read_method<R>(
+        constant_pool: &Vec<ConstantPoolTag>,
+        buff: &mut BufReader<R>,
+    ) -> Result<Method, Error>
+    where
+        R: Read + Seek,
+    {
         let access_flags = buff.read_u16::<BigEndian>()?;
         let name_index = buff.read_u16::<BigEndian>()?;
         let descriptor_index = buff.read_u16::<BigEndian>()?;
         let attributes_count = buff.read_u16::<BigEndian>()?;
-        let attributes: Vec<Attribute> = Self::read_attributes_vec(attributes_count, &constant_pool, buff);
+        #[cfg(feature = "debug-logging")]
+        {
+            println!("    Reading method #{} (0x{:x})", name_index, name_index);
+            println!("    Reading method attributes");
+        }
+        let attributes: Vec<Attribute> =
+            Self::read_attributes_vec(attributes_count, &constant_pool, buff);
 
         Ok(Method {
             access_flags,
@@ -242,137 +429,189 @@ where
         })
     }
 
-    fn read_stack_frames_vec<R>(count: type_alias::u2, buff: &mut BufReader<R>) -> Vec<StackMapFrame>
+    fn read_stack_frames_vec<R>(
+        count: type_alias::u2,
+        buff: &mut BufReader<R>,
+    ) -> Vec<StackMapFrame>
     where
-        R: Read,
+        R: Read + Seek,
     {
         let mut stack_frames: Vec<StackMapFrame> = Vec::with_capacity(count as usize);
-        for _ in 0..count {
+        for i in 0..count {
+            #[cfg(feature = "debug-logging")]
+            {
+                println!("    Reading {}th entry of StackMapTable", i);
+            }
             match Self::read_stack_frame(buff) {
                 Ok(res) => stack_frames.push(res),
-                Err(_) => {}
+                Err(err) => println!("error while reading {}th stack frame: {}", i, err),
             };
-        };
-        return stack_frames;
+        }
+        stack_frames
     }
 
     fn read_stack_frame<R>(buff: &mut BufReader<R>) -> Result<StackMapFrame, Error>
     where
-        R: Read,
+        R: Read + Seek,
     {
         let frame_type = buff.read_u8()?;
+        #[cfg(feature = "debug-logging")]
+        {
+            println!("    Frame type: {}", frame_type);
+        }
 
-        Ok(
-            match frame_type {
-                0..=63 => StackMapFrame::SameFrame { frame_type },
-                64..=127 => {
-                    let verification_type_info = VerificationTypeInfo::try_from(buff)?;
-                    StackMapFrame::SameLocals1StackItemFrame {
-                        frame_type,
-                        stack: vec![verification_type_info],
-                    }
+        Ok(match frame_type {
+            0..=63 => StackMapFrame::SameFrame { frame_type },
+            64..=127 => {
+                let verification_type_info = VerificationTypeInfo::try_from(buff)?;
+                StackMapFrame::SameLocals1StackItemFrame {
+                    frame_type,
+                    stack: vec![verification_type_info],
                 }
-                247 => {
-                    let offset_delta = buff.read_u16::<BigEndian>()?;
-                    let verification_type_info = VerificationTypeInfo::try_from(buff)?;
-                    StackMapFrame::SameLocals1StackItemFrameExtended {
-                        frame_type,
-                        offset_delta,
-                        stack: vec![verification_type_info],
-                    }
+            }
+            247 => {
+                let offset_delta = buff.read_u16::<BigEndian>()?;
+                let verification_type_info = VerificationTypeInfo::try_from(buff)?;
+                StackMapFrame::SameLocals1StackItemFrameExtended {
+                    frame_type,
+                    offset_delta,
+                    stack: vec![verification_type_info],
                 }
-                248..=250 => {
-                    let offset_delta = buff.read_u16::<BigEndian>()?;
-                    StackMapFrame::ChopFrame {
-                        frame_type,
-                        offset_delta,
-                    }
+            }
+            248..=250 => {
+                let offset_delta = buff.read_u16::<BigEndian>()?;
+                StackMapFrame::ChopFrame {
+                    frame_type,
+                    offset_delta,
                 }
-                251 => {
-                    let offset_delta = buff.read_u16::<BigEndian>()?;
-                    StackMapFrame::SameFrameExtended {
-                        frame_type,
-                        offset_delta,
-                    }
+            }
+            251 => {
+                let offset_delta = buff.read_u16::<BigEndian>()?;
+                StackMapFrame::SameFrameExtended {
+                    frame_type,
+                    offset_delta,
                 }
-                252..=254 => {
-                    let offset_delta = buff.read_u16::<BigEndian>()?;
-                    let mut locals: Vec<VerificationTypeInfo> = vec![];
-                    for _ in 0..(frame_type - 251) {
-                        locals.push(VerificationTypeInfo::try_from(&mut *buff)?);
-                    }
-                    StackMapFrame::AppendFrame {
-                        frame_type,
-                        offset_delta,
-                        locals,
-                    }
+            }
+            252..=254 => {
+                let offset_delta = buff.read_u16::<BigEndian>()?;
+                let mut locals: Vec<VerificationTypeInfo> = vec![];
+                for _ in 0..(frame_type - 251) {
+                    locals.push(VerificationTypeInfo::try_from(&mut *buff)?);
                 }
-                255 => {
-                    let offset_delta = buff.read_u16::<BigEndian>()?;
-                    let number_of_locals = buff.read_u16::<BigEndian>()?;
-                    let mut locals: Vec<VerificationTypeInfo> = vec![];
-                    for _ in 0..number_of_locals {
-                        locals.push(VerificationTypeInfo::try_from(&mut *buff)?);
-                    }
-                    let number_of_stack_items = buff.read_u16::<BigEndian>()?;
-                    let mut stack: Vec<VerificationTypeInfo> = vec![];
-                    for _ in 0..number_of_stack_items {
-                        stack.push(VerificationTypeInfo::try_from(&mut *buff)?);
-                    }
-                    StackMapFrame::FullFrame {
-                        frame_type,
-                        offset_delta,
-                        number_of_locals,
-                        locals,
-                        number_of_stack_items,
-                        stack,
-                    }
+                StackMapFrame::AppendFrame {
+                    frame_type,
+                    offset_delta,
+                    locals,
                 }
-                _ => {
-                    return Err(Error::new(
+            }
+            255 => {
+                let offset_delta = buff.read_u16::<BigEndian>()?;
+                let number_of_locals = buff.read_u16::<BigEndian>()?;
+                let mut locals: Vec<VerificationTypeInfo> = vec![];
+                for _ in 0..number_of_locals {
+                    locals.push(VerificationTypeInfo::try_from(&mut *buff)?);
+                }
+                let number_of_stack_items = buff.read_u16::<BigEndian>()?;
+                let mut stack: Vec<VerificationTypeInfo> = vec![];
+                for _ in 0..number_of_stack_items {
+                    stack.push(VerificationTypeInfo::try_from(&mut *buff)?);
+                }
+                StackMapFrame::FullFrame {
+                    frame_type,
+                    offset_delta,
+                    number_of_locals,
+                    locals,
+                    number_of_stack_items,
+                    stack,
+                }
+            }
+            _ => {
+                return Err(Error::new(
                         ErrorKind::InvalidInput,
                         format!("frame_type {} is reserved for future use, is your classfile correct or library up to date?", frame_type))
                     );
-                }
             }
-        )
+        })
     }
 
-    fn read_attributes_vec<R>(count: type_alias::u2, constant_pool: &Vec<ConstantPoolTags>, buff: &mut BufReader<R>) -> Vec<Attribute>
-    where R: Read {
+    fn read_attributes_vec<R>(
+        count: type_alias::u2,
+        constant_pool: &Vec<ConstantPoolTag>,
+        buff: &mut BufReader<R>,
+    ) -> Vec<Attribute>
+    where
+        R: Read + Seek,
+    {
         let mut attributes: Vec<Attribute> = Vec::with_capacity(count as usize);
         for _ in 0..count {
             match Self::read_attribute(constant_pool, buff) {
                 Ok(res) => attributes.push(res),
-                Err(err) => eprintln!("unable to read attribute err={err}")
+                Err(err) => eprintln!("unable to read attribute err={err}"),
             };
-        };
+        }
         attributes
     }
 
     ///
     /// Oracle docs: https://docs.oracle.com/javase/specs/jvms/se22/html/jvms-4.html#jvms-4.7
     ///
-    fn read_attribute<R>(constant_pool: &Vec<ConstantPoolTags>, buff: &mut BufReader<R>) -> Result<Attribute, Error> 
-    where R: Read {
+    fn read_attribute<R>(
+        constant_pool: &Vec<ConstantPoolTag>,
+        buff: &mut BufReader<R>,
+    ) -> Result<Attribute, Error>
+    where
+        R: Read + Seek,
+    {
+        #[cfg(feature = "debug-logging")]
+        {
+            println!(
+                "    Reading attribute name index at 0x{:x}",
+                buff.stream_position()?
+            );
+        }
         let attribute_name_index = buff.read_u16::<BigEndian>()?;
+        #[cfg(feature = "debug-logging")]
+        {
+            println!(
+                "    Reading attribute length at 0x{:x}",
+                buff.stream_position()?
+            );
+        }
         let attribute_length = buff.read_u32::<BigEndian>()?;
 
         let attribute_name = match constant_pool.get(attribute_name_index as usize) {
-            Some(ConstantPoolTags::Utf8 { _value, .. }) => _value.as_str(),
-            Some(e) => return Err(Error::new(
-                ErrorKind::InvalidData,
-                format!("expected Utf8 tag at index {} in constant pool, got {}", attribute_name_index, e))
-            ),
-            None => return Err(Error::new(
-                ErrorKind::NotFound,
-                format!("nothing found at index {} in constant pool", attribute_name_index))
-            )
+            Some(ConstantPoolTag::Utf8 { _value, .. }) => _value.as_str(),
+            Some(e) => {
+                return Err(Error::new(
+                    ErrorKind::InvalidData,
+                    format!(
+                        "expected Utf8 tag at index {} in constant pool, got {}",
+                        attribute_name_index, e
+                    ),
+                ))
+            }
+            None => {
+                return Err(Error::new(
+                    ErrorKind::NotFound,
+                    format!(
+                        "nothing found at index {} in constant pool",
+                        attribute_name_index
+                    ),
+                ))
+            }
         };
+        #[cfg(feature = "debug-logging")]
+        {
+            println!("    Reading attribute {}", attribute_name);
+        }
 
         match attribute_name {
             // critical to work on JVM
             "ConstantValue" => {
+                #[cfg(feature = "debug-logging")]
+                {
+                    println!("    Reading ConstantValue attribute");
+                }
                 Ok(Attribute::ConstantValue {
                     attribute_name_index,
                     attribute_length,
@@ -380,6 +619,10 @@ where
                 })
             }
             "Code" => {
+                #[cfg(feature = "debug-logging")]
+                {
+                    println!("    Reading Code attribute");
+                }
                 let max_stack = buff.read_u16::<BigEndian>()?;
                 let max_locals = buff.read_u16::<BigEndian>()?;
                 let code_length = buff.read_u32::<BigEndian>()?;
@@ -394,9 +637,10 @@ where
                         handler_pc: buff.read_u16::<BigEndian>()?,
                         catch_type: buff.read_u16::<BigEndian>()?,
                     });
-                };
+                }
                 let attributes_count = buff.read_u16::<BigEndian>()?;
-                let attributes: Vec<Attribute> = Self::read_attributes_vec(attributes_count, constant_pool, buff);
+                let attributes: Vec<Attribute> =
+                    Self::read_attributes_vec(attributes_count, constant_pool, buff);
 
                 Ok(Attribute::Code {
                     attribute_name_index,
@@ -412,11 +656,17 @@ where
                 })
             }
             "StackMapTable" => {
+                #[cfg(feature = "debug-logging")]
+                {
+                    println!("    Reading StackMapTable attribute");
+                }
                 let number_of_entries = buff.read_u16::<BigEndian>()?;
-                let entries: Vec<StackMapFrame> = Self::read_stack_frames_vec(
-                    number_of_entries,
-                    buff,
-                );
+                #[cfg(feature = "debug-logging")]
+                {
+                    println!("    Found {} entries", number_of_entries);
+                }
+                let entries: Vec<StackMapFrame> =
+                    Self::read_stack_frames_vec(number_of_entries, buff);
 
                 Ok(Attribute::StackMapTable {
                     attribute_name_index,
@@ -426,12 +676,18 @@ where
                 })
             }
             "BootstrapMethods" => {
+                #[cfg(feature = "debug-logging")]
+                {
+                    println!("    Reading BootstrapMethods attribute");
+                }
                 let num_bootstrap_methods = buff.read_u16::<BigEndian>()?;
-                let mut bootstrap_methods: Vec<BootstrapMethodEntry> = Vec::with_capacity(num_bootstrap_methods as usize);
+                let mut bootstrap_methods: Vec<BootstrapMethodEntry> =
+                    Vec::with_capacity(num_bootstrap_methods as usize);
                 for _ in 0..num_bootstrap_methods {
                     let bootstrap_method_ref = buff.read_u16::<BigEndian>()?;
                     let num_bootstrap_arguments = buff.read_u16::<BigEndian>()?;
-                    let mut bootstrap_arguments: Vec<type_alias::u2> = Vec::with_capacity(num_bootstrap_arguments as usize);
+                    let mut bootstrap_arguments: Vec<type_alias::u2> =
+                        Vec::with_capacity(num_bootstrap_arguments as usize);
                     for _ in 0..num_bootstrap_arguments {
                         bootstrap_arguments.push(buff.read_u16::<BigEndian>()?);
                     }
@@ -440,7 +696,7 @@ where
                         num_bootstrap_arguments,
                         bootstrap_arguments,
                     });
-                };
+                }
 
                 Ok(Attribute::BootstrapMethods {
                     attribute_name_index,
@@ -450,6 +706,10 @@ where
                 })
             }
             "NestHost" => {
+                #[cfg(feature = "debug-logging")]
+                {
+                    println!("    Reading NestHost attribute");
+                }
                 Ok(Attribute::NestHost {
                     attribute_name_index,
                     attribute_length,
@@ -457,11 +717,16 @@ where
                 })
             }
             "NestMembers" => {
+                #[cfg(feature = "debug-logging")]
+                {
+                    println!("    Reading NestMembers attribute");
+                }
                 let number_of_classes = buff.read_u16::<BigEndian>()?;
-                let mut classes: Vec<type_alias::u2> = Vec::with_capacity(number_of_classes as usize);
+                let mut classes: Vec<type_alias::u2> =
+                    Vec::with_capacity(number_of_classes as usize);
                 for _ in 0..number_of_classes {
                     classes.push(buff.read_u16::<BigEndian>()?);
-                };
+                }
 
                 Ok(Attribute::NestMembers {
                     attribute_name_index,
@@ -471,11 +736,16 @@ where
                 })
             }
             "PermittedSubclasses" => {
+                #[cfg(feature = "debug-logging")]
+                {
+                    println!("    Reading PermittedSubclasses attribute");
+                }
                 let number_of_classes = buff.read_u16::<BigEndian>()?;
-                let mut classes: Vec<type_alias::u2> = Vec::with_capacity(number_of_classes as usize);
+                let mut classes: Vec<type_alias::u2> =
+                    Vec::with_capacity(number_of_classes as usize);
                 for _ in 0..number_of_classes {
                     classes.push(buff.read_u16::<BigEndian>()?);
-                };
+                }
 
                 Ok(Attribute::PermittedSubclasses {
                     attribute_name_index,
@@ -487,11 +757,16 @@ where
 
             // optional, but critical for class libraries and instrumentation
             "Exceptions" => {
+                #[cfg(feature = "debug-logging")]
+                {
+                    println!("    Reading Exceptions attribute");
+                }
                 let number_of_exceptions = buff.read_u16::<BigEndian>()?;
-                let mut exception_index_table: Vec<type_alias::u2> = Vec::with_capacity(number_of_exceptions as usize);
+                let mut exception_index_table: Vec<type_alias::u2> =
+                    Vec::with_capacity(number_of_exceptions as usize);
                 for _ in 0..number_of_exceptions {
                     exception_index_table.push(buff.read_u16::<BigEndian>()?);
-                };
+                }
 
                 Ok(Attribute::Exceptions {
                     attribute_name_index,
@@ -501,8 +776,13 @@ where
                 })
             }
             "InnerClasses" => {
+                #[cfg(feature = "debug-logging")]
+                {
+                    println!("    Reading InnerClasses attribute");
+                }
                 let number_of_classes = buff.read_u16::<BigEndian>()?;
-                let mut classes: Vec<InnerClassEntry> = Vec::with_capacity(number_of_classes as usize);
+                let mut classes: Vec<InnerClassEntry> =
+                    Vec::with_capacity(number_of_classes as usize);
                 for _ in 0..number_of_classes {
                     classes.push(InnerClassEntry {
                         inner_class_info_index: buff.read_u16::<BigEndian>()?,
@@ -510,7 +790,7 @@ where
                         inner_name_index: buff.read_u16::<BigEndian>()?,
                         inner_class_access_flags: buff.read_u16::<BigEndian>()?,
                     });
-                };
+                }
 
                 Ok(Attribute::InnerClasses {
                     attribute_name_index,
@@ -520,6 +800,10 @@ where
                 })
             }
             "EnclosingMethod" => {
+                #[cfg(feature = "debug-logging")]
+                {
+                    println!("    Reading EnclosingMethod attribute");
+                }
                 Ok(Attribute::EnclosingMethod {
                     attribute_name_index,
                     attribute_length,
@@ -528,12 +812,20 @@ where
                 })
             }
             "Synthetic" => {
+                #[cfg(feature = "debug-logging")]
+                {
+                    println!("    Reading Synthetic attribute");
+                }
                 Ok(Attribute::Synthetic {
                     attribute_name_index,
                     attribute_length,
                 })
             }
             "Signature" => {
+                #[cfg(feature = "debug-logging")]
+                {
+                    println!("    Reading Signature attribute");
+                }
                 Ok(Attribute::Signature {
                     attribute_name_index,
                     attribute_length,
@@ -541,8 +833,13 @@ where
                 })
             }
             "Record" => {
+                #[cfg(feature = "debug-logging")]
+                {
+                    println!("    Reading Record attribute");
+                }
                 let components_count = buff.read_u16::<BigEndian>()?;
-                let mut components: Vec<RecordComponentInfo> = Vec::with_capacity(components_count as usize);
+                let mut components: Vec<RecordComponentInfo> =
+                    Vec::with_capacity(components_count as usize);
                 for _ in 0..components_count {
                     let name_index = buff.read_u16::<BigEndian>()?;
                     let descriptor_index = buff.read_u16::<BigEndian>()?;
@@ -551,7 +848,11 @@ where
                         name_index,
                         descriptor_index,
                         attributes_count,
-                        attributes: Self::read_attributes_vec(attributes_count, constant_pool, buff),
+                        attributes: Self::read_attributes_vec(
+                            attributes_count,
+                            constant_pool,
+                            buff,
+                        ),
                     });
                 }
 
@@ -563,6 +864,10 @@ where
                 })
             }
             "SourceFile" => {
+                #[cfg(feature = "debug-logging")]
+                {
+                    println!("    Reading SourceFile attribute");
+                }
                 Ok(Attribute::SourceFile {
                     attribute_name_index,
                     attribute_length,
@@ -570,14 +875,19 @@ where
                 })
             }
             "LineNumberTable" => {
+                #[cfg(feature = "debug-logging")]
+                {
+                    println!("    Reading LineNumberTable attribute");
+                }
                 let line_number_table_length = buff.read_u16::<BigEndian>()?;
-                let mut line_number_table: Vec<LineNumberEntry> = Vec::with_capacity(line_number_table_length as usize);
+                let mut line_number_table: Vec<LineNumberEntry> =
+                    Vec::with_capacity(line_number_table_length as usize);
                 for _ in 0..line_number_table_length {
                     line_number_table.push(LineNumberEntry {
                         start_pc: buff.read_u16::<BigEndian>()?,
                         line_number: buff.read_u16::<BigEndian>()?,
                     });
-                };
+                }
 
                 Ok(Attribute::LineNumberTable {
                     attribute_name_index,
@@ -587,8 +897,13 @@ where
                 })
             }
             "LocalVariableTable" => {
+                #[cfg(feature = "debug-logging")]
+                {
+                    println!("    Reading LocalVariableTable attribute");
+                }
                 let local_variable_table_length = buff.read_u16::<BigEndian>()?;
-                let mut local_variable_table: Vec<LocalVariableTableEntry> = Vec::with_capacity(local_variable_table_length as usize);
+                let mut local_variable_table: Vec<LocalVariableTableEntry> =
+                    Vec::with_capacity(local_variable_table_length as usize);
 
                 for _ in 0..local_variable_table_length {
                     local_variable_table.push(LocalVariableTableEntry {
@@ -608,8 +923,13 @@ where
                 })
             }
             "LocalVariableTypeTable" => {
+                #[cfg(feature = "debug-logging")]
+                {
+                    println!("    Reading LocalVariableTypeTable attribute");
+                }
                 let local_variable_type_table_length = buff.read_u16::<BigEndian>()?;
-                let mut local_variable_type_table: Vec<LocalVariableTypeTableEntry> = Vec::with_capacity(local_variable_type_table_length as usize);
+                let mut local_variable_type_table: Vec<LocalVariableTypeTableEntry> =
+                    Vec::with_capacity(local_variable_type_table_length as usize);
 
                 for _ in 0..local_variable_type_table_length {
                     local_variable_type_table.push(LocalVariableTypeTableEntry {
@@ -631,31 +951,47 @@ where
 
             // non-critical, but useful for tools and instrumentation
             "SourceDebugExtension" => {
-                let mut debug_extension_bytes: Vec<type_alias::u1> = vec![0u8; attribute_length as usize];
+                #[cfg(feature = "debug-logging")]
+                {
+                    println!("    Reading SourceDebugExtension attribute");
+                }
+                let mut debug_extension_bytes: Vec<type_alias::u1> =
+                    vec![0u8; attribute_length as usize];
                 buff.read_exact(&mut *debug_extension_bytes)?;
-                let debug_extension = match cesu8::from_java_cesu8(debug_extension_bytes.as_ref()) {
-                    Ok(res) => res.to_string().into_bytes(),
-                    Err(_) => {
+                let debug_extension = match read_modified_utf8(&debug_extension_bytes.as_ref()) {
+                    Ok(res) => res,
+                    Err(err) => {
                         return Err(Error::new(
                             ErrorKind::InvalidInput,
-                            format!("unable to read bytes string into utf8 string: {:?}", debug_extension_bytes))
-                        );
+                            format!(
+                                "unable to read bytes string into utf8 string: {:?}, err={}",
+                                debug_extension_bytes, err
+                            ),
+                        ));
                     }
                 };
 
                 Ok(Attribute::SourceDebugExtension {
                     attribute_name_index,
                     attribute_length,
-                    debug_extension: String::from_utf8(debug_extension.clone()).unwrap(),
+                    debug_extension,
                 })
             }
             "Deprecated" => {
+                #[cfg(feature = "debug-logging")]
+                {
+                    println!("    Reading Deprecated attribute");
+                }
                 Ok(Attribute::Deprecated {
                     attribute_name_index,
                     attribute_length,
                 })
             }
             "RuntimeVisibleAnnotations" | "RuntimeInvisibleAnnotations" => {
+                #[cfg(feature = "debug-logging")]
+                {
+                    println!("    Reading RuntimeVisibleAnnotations or RuntimeInvisibleAnnotations attribute");
+                }
                 let num_annotations = buff.read_u16::<BigEndian>()?;
                 let annotations = Self::read_annotations_vec(num_annotations, buff)?;
 
@@ -672,12 +1008,17 @@ where
                         num_annotations,
                         annotations,
                     },
-                    _ => unreachable!()
+                    _ => unreachable!(),
                 })
             }
             "RuntimeVisibleParameterAnnotations" | "RuntimeInvisibleParameterAnnotations" => {
+                #[cfg(feature = "debug-logging")]
+                {
+                    println!("    Reading RuntimeVisibleParameterAnnotations or RuntimeInvisibleParameterAnnotations attribute");
+                }
                 let num_parameters = buff.read_u8()?;
-                let mut parameter_annotations: Vec<ParameterAnnotation> = Vec::with_capacity(num_parameters as usize);
+                let mut parameter_annotations: Vec<ParameterAnnotation> =
+                    Vec::with_capacity(num_parameters as usize);
                 for _ in 0..num_parameters {
                     let num_annotations = buff.read_u16::<BigEndian>()?;
                     let annotations = Self::read_annotations_vec(num_annotations, buff)?;
@@ -688,36 +1029,57 @@ where
                 }
 
                 Ok(match attribute_name {
-                    "RuntimeVisibleParameterAnnotations" => Attribute::RuntimeVisibleParameterAnnotations {
-                        attribute_name_index,
-                        attribute_length,
-                        num_parameters,
-                        parameter_annotations,
-                    },
-                    "RuntimeInvisibleParameterAnnotations" => Attribute::RuntimeInvisibleParameterAnnotations {
-                        attribute_name_index,
-                        attribute_length,
-                        num_parameters,
-                        parameter_annotations,
-                    },
-                    _ => unreachable!()
+                    "RuntimeVisibleParameterAnnotations" => {
+                        Attribute::RuntimeVisibleParameterAnnotations {
+                            attribute_name_index,
+                            attribute_length,
+                            num_parameters,
+                            parameter_annotations,
+                        }
+                    }
+                    "RuntimeInvisibleParameterAnnotations" => {
+                        Attribute::RuntimeInvisibleParameterAnnotations {
+                            attribute_name_index,
+                            attribute_length,
+                            num_parameters,
+                            parameter_annotations,
+                        }
+                    }
+                    _ => unreachable!(),
                 })
             }
             "RuntimeVisibleTypeAnnotations" | "RuntimeInvisibleTypeAnnotations" => {
+                #[cfg(feature = "debug-logging")]
+                {
+                    println!("    Reading RuntimeVisibleTypeAnnotations or RuntimeInvisibleTypeAnnotations attribute");
+                }
                 let num_parameters = buff.read_u16::<BigEndian>()?;
-                let mut annotations: Vec<TypeAnnotation> = Vec::with_capacity(num_parameters as usize);
+                let mut annotations: Vec<TypeAnnotation> =
+                    Vec::with_capacity(num_parameters as usize);
                 for _ in 0..num_parameters {
                     let target_type: type_alias::u1 = buff.read_u8()?;
                     let target_info = match target_type {
-                        0x00 | 0x01 => TargetInfo::TypeParameterTarget { type_parameter_index: buff.read_u8()? },
-                        0x10 => TargetInfo::SupertypeTarget { supertype_index: buff.read_u16::<BigEndian>()? },
-                        0x11 | 0x12 => TargetInfo::TypeParameterBoundTarget { type_parameter_index: buff.read_u8()?, bound_index: buff.read_u8()? },
+                        0x00 | 0x01 => TargetInfo::TypeParameterTarget {
+                            type_parameter_index: buff.read_u8()?,
+                        },
+                        0x10 => TargetInfo::SupertypeTarget {
+                            supertype_index: buff.read_u16::<BigEndian>()?,
+                        },
+                        0x11 | 0x12 => TargetInfo::TypeParameterBoundTarget {
+                            type_parameter_index: buff.read_u8()?,
+                            bound_index: buff.read_u8()?,
+                        },
                         0x13 | 0x14 | 0x15 => TargetInfo::EmptyTarget {},
-                        0x16 => TargetInfo::FormalParameterTarget { formal_parameter_index: buff.read_u8()? },
-                        0x17 => TargetInfo::ThrowsTarget { throws_type_index: buff.read_u16::<BigEndian>()? },
+                        0x16 => TargetInfo::FormalParameterTarget {
+                            formal_parameter_index: buff.read_u8()?,
+                        },
+                        0x17 => TargetInfo::ThrowsTarget {
+                            throws_type_index: buff.read_u16::<BigEndian>()?,
+                        },
                         0x40 | 0x41 => {
                             let table_length = buff.read_u16::<BigEndian>()?;
-                            let mut table: Vec<LocalvarTargetTableEntry> = Vec::with_capacity(table_length as usize);
+                            let mut table: Vec<LocalvarTargetTableEntry> =
+                                Vec::with_capacity(table_length as usize);
                             for _ in 0..table_length {
                                 table.push(LocalvarTargetTableEntry {
                                     start_pc: buff.read_u16::<BigEndian>()?,
@@ -725,12 +1087,22 @@ where
                                     index: buff.read_u16::<BigEndian>()?,
                                 });
                             }
-                            TargetInfo::LocalvarTarget { table_length, table }
+                            TargetInfo::LocalvarTarget {
+                                table_length,
+                                table,
+                            }
                         }
-                        0x42 => TargetInfo::CatchTarget { exception_table_index: buff.read_u16::<BigEndian>()? },
-                        0x43 | 0x44 | 0x45 | 0x46 => TargetInfo::OffsetTarget { offset: buff.read_u16::<BigEndian>()? },
-                        0x47 | 0x48 | 0x49 | 0x4A | 0x4B => TargetInfo::TypeArgumentTarget { offset: buff.read_u16::<BigEndian>()?, type_argument_index: buff.read_u8()? },
-                        _ => continue
+                        0x42 => TargetInfo::CatchTarget {
+                            exception_table_index: buff.read_u16::<BigEndian>()?,
+                        },
+                        0x43 | 0x44 | 0x45 | 0x46 => TargetInfo::OffsetTarget {
+                            offset: buff.read_u16::<BigEndian>()?,
+                        },
+                        0x47 | 0x48 | 0x49 | 0x4A | 0x4B => TargetInfo::TypeArgumentTarget {
+                            offset: buff.read_u16::<BigEndian>()?,
+                            type_argument_index: buff.read_u8()?,
+                        },
+                        _ => continue,
                     };
                     let target_path = {
                         let path_length = buff.read_u8()?;
@@ -741,14 +1113,14 @@ where
                                 type_argument_index: buff.read_u8()?,
                             });
                         }
-                        TypePath {
-                            path_length,
-                            path,
-                        }
+                        TypePath { path_length, path }
                     };
                     let type_index = buff.read_u16::<BigEndian>()?;
                     let num_element_value_pairs = buff.read_u16::<BigEndian>()?;
-                    let element_value_pairs = Self::read_annotations_element_value_pairs_vec(num_element_value_pairs, buff)?;
+                    let element_value_pairs = Self::read_annotations_element_value_pairs_vec(
+                        num_element_value_pairs,
+                        buff,
+                    )?;
 
                     annotations.push(TypeAnnotation {
                         target_type,
@@ -767,16 +1139,22 @@ where
                         num_parameters,
                         annotations,
                     },
-                    "RuntimeInvisibleTypeAnnotations" => Attribute::RuntimeInvisibleTypeAnnotations {
-                        attribute_name_index,
-                        attribute_length,
-                        num_parameters,
-                        annotations,
-                    },
-                    _ => unreachable!()
+                    "RuntimeInvisibleTypeAnnotations" => {
+                        Attribute::RuntimeInvisibleTypeAnnotations {
+                            attribute_name_index,
+                            attribute_length,
+                            num_parameters,
+                            annotations,
+                        }
+                    }
+                    _ => unreachable!(),
                 })
             }
             "AnnotationDefault" => {
+                #[cfg(feature = "debug-logging")]
+                {
+                    println!("    Reading AnnotationDefault attribute");
+                }
                 Ok(Attribute::AnnotationDefault {
                     attribute_name_index,
                     attribute_length,
@@ -784,12 +1162,19 @@ where
                 })
             }
             "MethodParameters" => {
+                #[cfg(feature = "debug-logging")]
+                {
+                    println!("    Reading MethodParameters attribute");
+                }
                 let parameters_count = buff.read_u8()?;
                 let mut parameters: Vec<Parameter> = Vec::with_capacity(parameters_count as usize);
                 for _ in 0..parameters_count {
                     parameters.push(Parameter {
                         name_index: buff.read_u16::<BigEndian>()?,
-                        access_flags: AccessFlags::from((AccessFlagContext::Module, buff.read_u16::<BigEndian>()?)),
+                        access_flags: AccessFlags::from((
+                            AccessFlagContext::Module,
+                            buff.read_u16::<BigEndian>()?,
+                        )),
                     });
                 }
 
@@ -801,6 +1186,10 @@ where
                 })
             }
             "Module" => {
+                #[cfg(feature = "debug-logging")]
+                {
+                    println!("    Reading Module attribute");
+                }
                 let module_name_index = buff.read_u16::<BigEndian>()?;
                 let module_flags = buff.read_u16::<BigEndian>()?;
                 let module_version_index = buff.read_u16::<BigEndian>()?;
@@ -880,11 +1269,16 @@ where
                 })
             }
             "ModulePackages" => {
+                #[cfg(feature = "debug-logging")]
+                {
+                    println!("    Reading ModulePackages attribute");
+                }
                 let package_count = buff.read_u16::<BigEndian>()?;
-                let mut package_index: Vec<type_alias::u2> = Vec::with_capacity(package_count as usize);
+                let mut package_index: Vec<type_alias::u2> =
+                    Vec::with_capacity(package_count as usize);
                 for _ in 0..package_count {
                     package_index.push(buff.read_u16::<BigEndian>()?);
-                };
+                }
                 Ok(Attribute::ModulePackages {
                     attribute_name_index,
                     attribute_length,
@@ -893,6 +1287,10 @@ where
                 })
             }
             "ModuleMainClass" => {
+                #[cfg(feature = "debug-logging")]
+                {
+                    println!("    Reading ModuleMainClass attribute");
+                }
                 Ok(Attribute::ModuleMainClass {
                     attribute_name_index,
                     attribute_length,
@@ -913,22 +1311,33 @@ where
         }
     }
 
-    fn read_annotation_element_values_vec<R>(num_values: type_alias::u2, buff: &mut BufReader<R>) -> Result<Vec<ElementValue>, Error>
-    where R: Read {
+    fn read_annotation_element_values_vec<R>(
+        num_values: type_alias::u2,
+        buff: &mut BufReader<R>,
+    ) -> Result<Vec<ElementValue>, Error>
+    where
+        R: Read + Seek,
+    {
         let mut element_values: Vec<ElementValue> = Vec::with_capacity(num_values as usize);
         for _ in 0..num_values {
             match Self::read_annotation_element_value(buff) {
                 Ok(res) => element_values.push(res),
-                Err(_) => continue
+                Err(_) => continue,
             }
         }
 
         Ok(element_values)
     }
 
-    fn read_annotations_element_value_pairs_vec<R>(num_element_value_pairs: type_alias::u2, buff: &mut BufReader<R>) -> Result<Vec<ElementValuePair>, Error>
-    where R: Read {
-        let mut element_value_pairs: Vec<ElementValuePair> = Vec::with_capacity(num_element_value_pairs as usize);
+    fn read_annotations_element_value_pairs_vec<R>(
+        num_element_value_pairs: type_alias::u2,
+        buff: &mut BufReader<R>,
+    ) -> Result<Vec<ElementValuePair>, Error>
+    where
+        R: Read + Seek,
+    {
+        let mut element_value_pairs: Vec<ElementValuePair> =
+            Vec::with_capacity(num_element_value_pairs as usize);
 
         for _ in 0..num_element_value_pairs {
             let element_name_index = buff.read_u16::<BigEndian>()?;
@@ -943,39 +1352,74 @@ where
     }
 
     fn read_annotation_element_value<R>(buff: &mut BufReader<R>) -> Result<ElementValue, Error>
-    where R: Read {
+    where
+        R: Read + Seek,
+    {
         let tag = buff.read_u8()?;
 
         Ok(ElementValue {
             tag,
             value: match tag as char {
-                'B' => Value::ConstValueIndex { const_value_index: buff.read_u16::<BigEndian>()? },
-                'C' => Value::ConstValueIndex { const_value_index: buff.read_u16::<BigEndian>()? },
-                'D' => Value::ConstValueIndex { const_value_index: buff.read_u16::<BigEndian>()? },
-                'F' => Value::ConstValueIndex { const_value_index: buff.read_u16::<BigEndian>()? },
-                'I' => Value::ConstValueIndex { const_value_index: buff.read_u16::<BigEndian>()? },
-                'J' => Value::ConstValueIndex { const_value_index: buff.read_u16::<BigEndian>()? },
-                'S' => Value::ConstValueIndex { const_value_index: buff.read_u16::<BigEndian>()? },
-                'Z' => Value::ConstValueIndex { const_value_index: buff.read_u16::<BigEndian>()? },
-                's' => Value::ConstValueIndex { const_value_index: buff.read_u16::<BigEndian>()? },
-                'e' => Value::EnumConstValue { type_name_index: buff.read_u16::<BigEndian>()?, const_name_index: buff.read_u16::<BigEndian>()? },
-                'c' => Value::ClassInfoIndex { class_info_index: buff.read_u16::<BigEndian>()? },
-                '@' => Value::AnnotationValue { annotation_value: Self::read_annotation(buff)? },
+                'B' => Value::ConstValueIndex {
+                    const_value_index: buff.read_u16::<BigEndian>()?,
+                },
+                'C' => Value::ConstValueIndex {
+                    const_value_index: buff.read_u16::<BigEndian>()?,
+                },
+                'D' => Value::ConstValueIndex {
+                    const_value_index: buff.read_u16::<BigEndian>()?,
+                },
+                'F' => Value::ConstValueIndex {
+                    const_value_index: buff.read_u16::<BigEndian>()?,
+                },
+                'I' => Value::ConstValueIndex {
+                    const_value_index: buff.read_u16::<BigEndian>()?,
+                },
+                'J' => Value::ConstValueIndex {
+                    const_value_index: buff.read_u16::<BigEndian>()?,
+                },
+                'S' => Value::ConstValueIndex {
+                    const_value_index: buff.read_u16::<BigEndian>()?,
+                },
+                'Z' => Value::ConstValueIndex {
+                    const_value_index: buff.read_u16::<BigEndian>()?,
+                },
+                's' => Value::ConstValueIndex {
+                    const_value_index: buff.read_u16::<BigEndian>()?,
+                },
+                'e' => Value::EnumConstValue {
+                    type_name_index: buff.read_u16::<BigEndian>()?,
+                    const_name_index: buff.read_u16::<BigEndian>()?,
+                },
+                'c' => Value::ClassInfoIndex {
+                    class_info_index: buff.read_u16::<BigEndian>()?,
+                },
+                '@' => Value::AnnotationValue {
+                    annotation_value: Self::read_annotation(buff)?,
+                },
                 '[' => {
                     let num_values = buff.read_u16::<BigEndian>()?;
                     let values = Self::read_annotation_element_values_vec(num_values, buff)?;
                     Value::ArrayValue { num_values, values }
                 }
-                _ => return Err(Error::new(ErrorKind::InvalidInput, format!("unknown annotation element value tag: {tag}")))
+                _ => {
+                    return Err(Error::new(
+                        ErrorKind::InvalidInput,
+                        format!("unknown annotation element value tag: {tag}"),
+                    ))
+                }
             },
         })
     }
 
     fn read_annotation<R>(buff: &mut BufReader<R>) -> Result<Annotation, Error>
-    where R: Read {
+    where
+        R: Read + Seek,
+    {
         let type_index = buff.read_u16::<BigEndian>()?;
         let num_element_value_pairs = buff.read_u16::<BigEndian>()?;
-        let element_value_pairs: Vec<ElementValuePair> = Self::read_annotations_element_value_pairs_vec(num_element_value_pairs, buff)?;
+        let element_value_pairs: Vec<ElementValuePair> =
+            Self::read_annotations_element_value_pairs_vec(num_element_value_pairs, buff)?;
 
         Ok(Annotation {
             type_index,
@@ -984,23 +1428,31 @@ where
         })
     }
 
-    fn read_annotations_vec<R>(num_annotations: type_alias::u2, buff: &mut BufReader<R>) -> Result<Vec<Annotation>, Error>
-    where R: Read {
+    fn read_annotations_vec<R>(
+        num_annotations: type_alias::u2,
+        buff: &mut BufReader<R>,
+    ) -> Result<Vec<Annotation>, Error>
+    where
+        R: Read + Seek,
+    {
         let mut annotations: Vec<Annotation> = Vec::with_capacity(num_annotations as usize);
 
         for _ in 0..num_annotations {
             match Self::read_annotation(buff) {
                 Ok(res) => annotations.push(res),
-                Err(_) => continue
+                Err(_) => continue,
             };
-        };
+        }
 
         Ok(annotations)
     }
 
-    fn read_tag<R>(buff: &mut BufReader<R>, mappings: Option<&LinkedHashMap<String, String>>) -> Result<ConstantPoolTags, Error>
+    fn read_tag<R>(
+        buff: &mut BufReader<R>,
+        mappings: Option<&LinkedHashMap<String, String>>,
+    ) -> Result<ConstantPoolTag, Error>
     where
-        R: Read,
+        R: Read + Seek,
     {
         let tag_byte = buff.read_u8()?;
         let tag = ConstantPoolJvmTag::from(tag_byte);
@@ -1009,35 +1461,39 @@ where
                 let mut length = buff.read_u16::<BigEndian>()?;
 
                 let mut bytes = vec![0u8; length as usize];
+                #[cfg(feature = "debug-logging")]
+                {
+                    println!("reading {} bytes of string", length);
+                }
                 buff.read_exact(&mut *bytes)?;
-                let mut _value = String::from_utf8(
-                    match cesu8::from_java_cesu8(bytes.as_ref()) {
-                        Ok(res) => res.to_string().into_bytes(),
-                        Err(_) => {
-                            return Err(Error::new(
-                                ErrorKind::InvalidInput,
-                                format!("unable to read bytes string into utf8 string: {:?}", bytes))
-                            );
-                        }
+                let mut value_read_correctly = true;
+                let mut _value = match read_modified_utf8(&bytes) {
+                    Ok(res) => res,
+                    Err(err) => {
+                        println!(
+                            "unable to read bytes string into utf8 string: {:?}, err={}",
+                            bytes, err
+                        );
+                        value_read_correctly = false;
+                        String::new()
                     }
-                ).unwrap();
+                };
 
-                match mappings {
-                    None => {}
-                    Some(mapping) => {
-                        match mapping.get(&_value) {
+                if value_read_correctly {
+                    match mappings {
+                        None => {}
+                        Some(mapping) => match mapping.get(&_value) {
                             None => {}
                             Some(val) => {
                                 _value = val.clone();
-                                bytes = cesu8::to_java_cesu8(&_value.as_str()).into_owned();
+                                bytes = Vec::from(_value.as_bytes());
                                 length = bytes.len() as u16;
                             }
-                        }
+                        },
                     }
                 }
 
-
-                Ok(ConstantPoolTags::Utf8 {
+                Ok(ConstantPoolTag::Utf8 {
                     tag: ConstantPoolJvmTag::Utf8 as u8,
                     length,
                     bytes,
@@ -1048,7 +1504,7 @@ where
             ConstantPoolJvmTag::Integer => {
                 let bytes = buff.read_u32::<BigEndian>()?;
 
-                Ok(ConstantPoolTags::Integer {
+                Ok(ConstantPoolTag::Integer {
                     tag: ConstantPoolJvmTag::Integer as u8,
                     bytes,
                     _value: bytes as i32,
@@ -1058,7 +1514,7 @@ where
             ConstantPoolJvmTag::Float => {
                 let bytes = buff.read_u32::<BigEndian>()?;
 
-                Ok(ConstantPoolTags::Float {
+                Ok(ConstantPoolTag::Float {
                     tag: ConstantPoolJvmTag::Float as u8,
                     bytes,
                     _value: bytes as f32,
@@ -1070,7 +1526,7 @@ where
                 let low_bytes = buff.read_u32::<BigEndian>()?;
                 let value = (((high_bytes as u64) << 32) | (low_bytes as u64)) as i64;
 
-                Ok(ConstantPoolTags::Long {
+                Ok(ConstantPoolTag::Long {
                     tag: ConstantPoolJvmTag::Long as u8,
                     high_bytes,
                     low_bytes,
@@ -1083,7 +1539,7 @@ where
                 let low_bytes = buff.read_u32::<BigEndian>()?;
                 let value = (((high_bytes as u64) << 32) | (low_bytes as u64)) as f64;
 
-                Ok(ConstantPoolTags::Double {
+                Ok(ConstantPoolTag::Double {
                     tag: ConstantPoolJvmTag::Double as u8,
                     high_bytes,
                     low_bytes,
@@ -1094,7 +1550,7 @@ where
             ConstantPoolJvmTag::String => {
                 let string_index = buff.read_u16::<BigEndian>()?;
 
-                Ok(ConstantPoolTags::String {
+                Ok(ConstantPoolTag::String {
                     tag: ConstantPoolJvmTag::String as u8,
                     string_index,
                 })
@@ -1103,7 +1559,7 @@ where
             ConstantPoolJvmTag::Class => {
                 let name_index = buff.read_u16::<BigEndian>()?;
 
-                Ok(ConstantPoolTags::Class {
+                Ok(ConstantPoolTag::Class {
                     tag: ConstantPoolJvmTag::Class as u8,
                     name_index,
                 })
@@ -1113,34 +1569,36 @@ where
                 let name_index = buff.read_u16::<BigEndian>()?;
                 let descriptor_index = buff.read_u16::<BigEndian>()?;
 
-                Ok(ConstantPoolTags::NameAndType {
+                Ok(ConstantPoolTag::NameAndType {
                     tag: ConstantPoolJvmTag::Class as u8,
                     name_index,
                     descriptor_index,
                 })
             }
 
-            ConstantPoolJvmTag::Fieldref | ConstantPoolJvmTag::Methodref | ConstantPoolJvmTag::InterfaceMethodref => {
+            ConstantPoolJvmTag::Fieldref
+            | ConstantPoolJvmTag::Methodref
+            | ConstantPoolJvmTag::InterfaceMethodref => {
                 let class_index = buff.read_u16::<BigEndian>()?;
                 let name_and_type_index = buff.read_u16::<BigEndian>()?;
 
                 Ok(match tag {
-                    ConstantPoolJvmTag::Fieldref => ConstantPoolTags::Fieldref {
+                    ConstantPoolJvmTag::Fieldref => ConstantPoolTag::Fieldref {
                         tag: ConstantPoolJvmTag::Fieldref as u8,
                         class_index,
                         name_and_type_index,
                     },
-                    ConstantPoolJvmTag::Methodref => ConstantPoolTags::Methodref {
+                    ConstantPoolJvmTag::Methodref => ConstantPoolTag::Methodref {
                         tag: ConstantPoolJvmTag::Fieldref as u8,
                         class_index,
                         name_and_type_index,
                     },
-                    ConstantPoolJvmTag::InterfaceMethodref => ConstantPoolTags::InterfaceMethodref {
+                    ConstantPoolJvmTag::InterfaceMethodref => ConstantPoolTag::InterfaceMethodref {
                         tag: ConstantPoolJvmTag::Fieldref as u8,
                         class_index,
                         name_and_type_index,
                     },
-                    _ => panic!("pizdec, kak tak?")
+                    _ => panic!("pizdec, kak tak?"),
                 })
             }
 
@@ -1148,7 +1606,7 @@ where
                 let reference_kind = buff.read_u8()?;
                 let reference_index = buff.read_u16::<BigEndian>()?;
 
-                Ok(ConstantPoolTags::MethodHandle {
+                Ok(ConstantPoolTag::MethodHandle {
                     tag: ConstantPoolJvmTag::MethodHandle as u8,
                     reference_kind,
                     reference_index,
@@ -1158,7 +1616,7 @@ where
             ConstantPoolJvmTag::MethodType => {
                 let descriptor_index = buff.read_u16::<BigEndian>()?;
 
-                Ok(ConstantPoolTags::MethodType {
+                Ok(ConstantPoolTag::MethodType {
                     tag: ConstantPoolJvmTag::MethodType as u8,
                     descriptor_index,
                 })
@@ -1168,7 +1626,7 @@ where
                 let bootstrap_method_attr_index = buff.read_u16::<BigEndian>()?;
                 let name_and_type_index = buff.read_u16::<BigEndian>()?;
 
-                Ok(ConstantPoolTags::Dynamic {
+                Ok(ConstantPoolTag::Dynamic {
                     tag: ConstantPoolJvmTag::Dynamic as u8,
                     bootstrap_method_attr_index,
                     name_and_type_index,
@@ -1179,7 +1637,7 @@ where
                 let bootstrap_method_attr_index = buff.read_u16::<BigEndian>()?;
                 let name_and_type_index = buff.read_u16::<BigEndian>()?;
 
-                Ok(ConstantPoolTags::InvokeDynamic {
+                Ok(ConstantPoolTag::InvokeDynamic {
                     tag: ConstantPoolJvmTag::InvokeDynamic as u8,
                     bootstrap_method_attr_index,
                     name_and_type_index,
@@ -1189,7 +1647,7 @@ where
             ConstantPoolJvmTag::Module => {
                 let name_index = buff.read_u16::<BigEndian>()?;
 
-                Ok(ConstantPoolTags::Module {
+                Ok(ConstantPoolTag::Module {
                     tag: ConstantPoolJvmTag::Module as u8,
                     name_index,
                 })
@@ -1198,15 +1656,16 @@ where
             ConstantPoolJvmTag::Package => {
                 let name_index = buff.read_u16::<BigEndian>()?;
 
-                Ok(ConstantPoolTags::Package {
+                Ok(ConstantPoolTag::Package {
                     tag: ConstantPoolJvmTag::Package as u8,
                     name_index,
                 })
             }
 
-            ConstantPoolJvmTag::INVALID => {
-                Err(Error::new(ErrorKind::InvalidInput, format!("tag {} not implemented!", tag_byte)))
-            }
+            ConstantPoolJvmTag::INVALID => Err(Error::new(
+                ErrorKind::InvalidInput,
+                format!("tag {} not implemented!", tag_byte),
+            )),
         }
     }
 }

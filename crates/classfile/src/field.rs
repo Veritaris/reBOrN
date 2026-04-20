@@ -1,9 +1,9 @@
-use std::io::{Error, Write};
-use byteorder::{BigEndian, WriteBytesExt};
 use crate::attributes::Attribute;
 use crate::type_alias;
+use byteorder::{BigEndian, WriteBytesExt};
+use std::io::{Error, Write};
 
-#[repr(packed)]
+#[derive(Debug, Clone)]
 pub struct Field {
     pub access_flags: type_alias::u2,
     pub name_index: type_alias::u2,

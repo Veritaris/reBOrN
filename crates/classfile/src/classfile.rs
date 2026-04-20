@@ -2,14 +2,13 @@ use std::fmt::{Debug, Display, Formatter};
 
 use crate::access_flags::{AccessFlagContext, AccessFlags};
 use crate::attributes::Attribute;
-use crate::constant_pool_tag::ConstantPoolTags;
+use crate::constant_pool_tag::ConstantPoolTag;
 use crate::field::Field;
 use crate::method::Method;
 use crate::type_alias;
 use indoc::indoc;
 
 pub const CLASS_HEADER: u32 = 0xCAFEBABE;
-
 
 // ClassFile {
 //     type_alias::u4             magic;
@@ -34,7 +33,7 @@ pub struct ClassFile {
     pub minor_version: type_alias::u2,
     pub major_version: type_alias::u2,
     pub constant_pool_count: type_alias::u2,
-    pub constant_pool: Vec<ConstantPoolTags>,
+    pub constant_pool: Vec<ConstantPoolTag>,
     pub access_flags: AccessFlags,
     pub this_class: type_alias::u2,
     pub super_class: type_alias::u2,
@@ -53,93 +52,91 @@ pub struct ClassFile {
 impl ClassFile {
     pub fn get_string_from_cpool(&self, index: u16) -> String {
         match self.constant_pool.get(index as usize).unwrap() {
-            ConstantPoolTags::Utf8 { _value, .. } => _value.clone(),
-            ConstantPoolTags::String { string_index, .. } => self.get_string_from_cpool(*string_index),
-            _ => String::new()
+            ConstantPoolTag::Utf8 { _value, .. } => _value.clone(),
+            ConstantPoolTag::String { string_index, .. } => {
+                self.get_string_from_cpool(*string_index)
+            }
+            _ => String::new(),
         }
+    }
+
+    pub fn get_from_cpool(&self, index: type_alias::u2) -> ConstantPoolTag {
+        self.constant_pool[index as usize].clone()
     }
 }
 
 impl Debug for ClassFile {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let constant_pool: String = self.constant_pool
+        let constant_pool: String = self
+            .constant_pool
             .iter()
             .enumerate()
             .skip(1)
-            .map(|(index, entry)| {
-                format!("{} {}", index, self.tag_to_display(entry))
-            })
-            .fold(
-                String::from("        "),
-                |acc, e| {
-                    acc + "\n        " + e.as_str()
-                },
-            );
+            .map(|(index, entry)| format!("{} {}", index, self.tag_to_display(entry)))
+            .fold(String::from("        "), |acc, e| {
+                acc + "\n        " + e.as_str()
+            });
 
-        let interfaces = self.interfaces
+        let interfaces = self
+            .interfaces
             .iter()
-            .map(|class_index| {
-                match self.constant_pool.get(*class_index as usize) {
+            .map(
+                |class_index| match self.constant_pool.get(*class_index as usize) {
                     Some(class_info) => match class_info {
-                        ConstantPoolTags::Class { name_index, .. } => {
+                        ConstantPoolTag::Class { name_index, .. } => {
                             self.get_string_from_cpool(*name_index)
                         }
-                        _ => panic!("expected Class_info found at index {} in constant pool: got {}", class_index, class_info)
+                        _ => panic!(
+                            "expected Class_info found at index {} in constant pool: got {}",
+                            class_index, class_info
+                        ),
                     },
-                    None => panic!("nothing found at index {} in constant pool", class_index)
-                }
-            })
-            .fold(
-                String::from("        "),
-                |acc, e| {
-                    acc + "\n        " + e.as_str()
+                    None => panic!("nothing found at index {} in constant pool", class_index),
                 },
-            );
+            )
+            .fold(String::from("        "), |acc, e| {
+                acc + "\n        " + e.as_str()
+            });
 
-        let fields = self.fields
+        let fields = self
+            .fields
             .iter()
             .map(|f| {
-                format!("{} {}",
-                        AccessFlags::from((AccessFlagContext::Field, f.access_flags)).as_string(),
-                        self.get_string_from_cpool(f.name_index)
+                format!(
+                    "{} {}",
+                    AccessFlags::from((AccessFlagContext::Field, f.access_flags)).as_string(),
+                    self.get_string_from_cpool(f.name_index)
                 )
             })
-            .fold(
-                String::from("        "),
-                |acc, f| {
-                    acc + "\n        " + f.as_str()
-                },
-            );
-        let methods = self.methods
+            .fold(String::from("        "), |acc, f| {
+                acc + "\n        " + f.as_str()
+            });
+        let methods = self
+            .methods
             .iter()
             .map(|m| {
-                format!("{} {} {}",
-                        AccessFlags::from((AccessFlagContext::Field, m.access_flags)).as_string(),
-                        self.get_string_from_cpool(m.name_index),
-                        self.get_string_from_cpool(m.descriptor_index),
+                format!(
+                    "{} {} {}",
+                    AccessFlags::from((AccessFlagContext::Field, m.access_flags)).as_string(),
+                    self.get_string_from_cpool(m.name_index),
+                    self.get_string_from_cpool(m.descriptor_index),
                 )
             })
-            .fold(
-                String::from("        "),
-                |acc, f| {
-                    acc + "\n        " + f.as_str()
-                },
-            );
-        let attributes = self.attributes
+            .fold(String::from("        "), |acc, f| {
+                acc + "\n        " + f.as_str()
+            });
+        let attributes = self
+            .attributes
             .iter()
-            .map(|attr| {
-                format!("{:?}", attr)
-            })
-            .fold(
-                String::from("        "),
-                |acc, f| {
-                    acc + "\n        " + f.as_str()
-                },
-            );
+            .map(|attr| format!("{:?}", attr))
+            .fold(String::from("        "), |acc, f| {
+                acc + "\n        " + f.as_str()
+            });
 
         f.write_str(
             format!(
-                indoc!("
+                indoc!(
+                    "
                 Classfile version {}.{} of class {}
                     constant_pool_count: {}
                     constant_pool: {}
@@ -150,7 +147,8 @@ impl Debug for ClassFile {
                     fields_count: {}{}
                     methods_count: {}{}
                     attributes_count: {}{}
-                    "),
+                    "
+                ),
                 self.major_version,
                 self.minor_version,
                 self.class_name_from_cp(),
@@ -179,7 +177,8 @@ impl Debug for ClassFile {
                     0 => String::from("<empty>"),
                     _ => attributes,
                 },
-            ).as_str()
+            )
+            .as_str(),
         )
     }
 }
@@ -187,79 +186,77 @@ impl Debug for ClassFile {
 impl Display for ClassFile {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let class_name = match self.constant_pool.get(self.this_class as usize) {
-            Some(ConstantPoolTags::Class { name_index, .. }) => {
+            Some(ConstantPoolTag::Class { name_index, .. }) => {
                 match self.constant_pool.get(*name_index as usize) {
-                    Some(ConstantPoolTags::Utf8 { bytes, .. }) => String::from_utf8(bytes.clone()).unwrap(),
-                    _ => panic!("pizdec")
+                    Some(ConstantPoolTag::Utf8 { bytes, .. }) => {
+                        String::from_utf8(bytes.clone()).unwrap()
+                    }
+                    _ => panic!("pizdec"),
                 }
             }
-            _ => panic!("pizdec x2")
+            _ => panic!("pizdec x2"),
         };
 
-        let interfaces = self.interfaces
+        let interfaces = self
+            .interfaces
             .iter()
-            .map(|class_index| {
-                match self.constant_pool.get(*class_index as usize) {
+            .map(
+                |class_index| match self.constant_pool.get(*class_index as usize) {
                     Some(class_info) => match class_info {
-                        ConstantPoolTags::Class { name_index, .. } => {
+                        ConstantPoolTag::Class { name_index, .. } => {
                             self.get_string_from_cpool(*name_index)
                         }
-                        _ => panic!("expected Class_info found at index {} in constant pool: got {}", class_index, class_info)
+                        _ => panic!(
+                            "expected Class_info found at index {} in constant pool: got {}",
+                            class_index, class_info
+                        ),
                     },
-                    None => panic!("nothing found at index {} in constant pool", class_index)
-                }
-            })
-            .fold(
-                String::from("        "),
-                |acc, e| {
-                    acc + "\n        " + e.as_str()
+                    None => panic!("nothing found at index {} in constant pool", class_index),
                 },
-            );
+            )
+            .fold(String::from("        "), |acc, e| {
+                acc + "\n        " + e.as_str()
+            });
 
-        let fields = self.fields
+        let fields = self
+            .fields
             .iter()
             .map(|f| {
-                format!("{} {}",
-                        AccessFlags::from((AccessFlagContext::Field, f.access_flags)).as_string(),
-                        self.get_string_from_cpool(f.name_index)
+                format!(
+                    "{} {}",
+                    AccessFlags::from((AccessFlagContext::Field, f.access_flags)).as_string(),
+                    self.get_string_from_cpool(f.name_index)
                 )
             })
-            .fold(
-                String::from("        "),
-                |acc, f| {
-                    acc + "\n        " + f.as_str()
-                },
-            );
-        let methods = self.methods
+            .fold(String::from("        "), |acc, f| {
+                acc + "\n        " + f.as_str()
+            });
+        let methods = self
+            .methods
             .iter()
             .map(|m| {
-                format!("{} {} {}",
-                        AccessFlags::from((AccessFlagContext::Field, m.access_flags)).as_string(),
-                        self.get_string_from_cpool(m.name_index),
-                        self.get_string_from_cpool(m.descriptor_index),
+                format!(
+                    "{} {} {}",
+                    AccessFlags::from((AccessFlagContext::Field, m.access_flags)).as_string(),
+                    self.get_string_from_cpool(m.name_index),
+                    self.get_string_from_cpool(m.descriptor_index),
                 )
             })
-            .fold(
-                String::from("        "),
-                |acc, f| {
-                    acc + "\n        " + f.as_str()
-                },
-            );
-        let attributes = self.attributes
+            .fold(String::from("        "), |acc, f| {
+                acc + "\n        " + f.as_str()
+            });
+        let attributes = self
+            .attributes
             .iter()
-            .map(|attr| {
-                format!("{:?}", attr)
-            })
-            .fold(
-                String::from("        "),
-                |acc, f| {
-                    acc + "\n        " + f.as_str()
-                },
-            );
+            .map(|attr| format!("{:?}", attr))
+            .fold(String::from("        "), |acc, f| {
+                acc + "\n        " + f.as_str()
+            });
 
         f.write_str(
             format!(
-                indoc!("
+                indoc!(
+                    "
                 Classfile version {}.{} of class {}
                     constant_pool_count: {}
                     access_flags: {}
@@ -269,7 +266,8 @@ impl Display for ClassFile {
                     fields_count: {}{}
                     methods_count: {}{}
                     attributes_count: {}{}
-                    "),
+                    "
+                ),
                 self.major_version,
                 self.minor_version,
                 self.class_name_from_cp(),
@@ -277,13 +275,15 @@ impl Display for ClassFile {
                 self.access_flags.as_string(),
                 class_name,
                 match self.constant_pool.get(self.super_class as usize) {
-                    Some(ConstantPoolTags::Class { name_index, .. }) => {
+                    Some(ConstantPoolTag::Class { name_index, .. }) => {
                         match self.constant_pool.get(*name_index as usize) {
-                            Some(ConstantPoolTags::Utf8 { bytes, .. }) => String::from_utf8(bytes.clone()).unwrap(),
-                            _ => panic!("pizdec")
+                            Some(ConstantPoolTag::Utf8 { bytes, .. }) => {
+                                String::from_utf8(bytes.clone()).unwrap()
+                            }
+                            _ => panic!("pizdec"),
                         }
                     }
-                    _ => panic!("pizdec x2")
+                    _ => panic!("pizdec x2"),
                 },
                 self.interfaces_count,
                 match self.interfaces_count {
@@ -305,10 +305,8 @@ impl Display for ClassFile {
                     0 => String::from("<empty>"),
                     _ => attributes,
                 },
-            ).as_str()
+            )
+            .as_str(),
         )
     }
 }
-
-
-

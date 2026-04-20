@@ -1,4 +1,3 @@
-use std::fs::OpenOptions;
 use std::io::{BufWriter, Write};
 use std::ops::Deref;
 use std::path::Path;
@@ -25,36 +24,53 @@ pub fn download_file<P: AsRef<Path>>(save_path: P, url: &String) -> Result<(), r
 pub fn download_tsrg<P: AsRef<Path>>(store_dir: P, mc_version: &str) {
     let file_url = format!("{SOURCE_DATA_DEFAULT_URL}/{mc_version}/joined.tsrg");
 
-    let save_path = store_dir.as_ref().join("mappings").join(mc_version).join("joined.tsrg");
+    let save_path = store_dir
+        .as_ref()
+        .join("mappings")
+        .join(mc_version)
+        .join("joined.tsrg");
     std::fs::create_dir_all(save_path.parent().unwrap()).unwrap();
     std::thread::spawn(move || {
-        match download_file(
-            save_path.as_path(),
-            &file_url,
-        ) {
-            Ok(_) => { println!("joined.tsrg downloaded"); }
-            Err(err) => { println!("error while downloading joined.tsrg: {err}"); }
+        match download_file(save_path.as_path(), &file_url) {
+            Ok(_) => {
+                println!("joined.tsrg downloaded");
+            }
+            Err(err) => {
+                println!("error while downloading joined.tsrg: {err}");
+            }
         };
     });
 }
 
-pub fn download_mappings<P: AsRef<Path>>(store_dir: P, mc_version: &str, channel: &str, mappings_version: &str) {
+pub fn download_mappings<P: AsRef<Path>>(
+    store_dir: P,
+    mc_version: &str,
+    channel: &str,
+    mappings_version: &str,
+) {
     let mappings_url_prepath = format!("{}/{}/{}", mc_version, channel, mappings_version);
     let mappings_url = format!("{SOURCE_DATA_DEFAULT_URL}/{mappings_url_prepath}");
     let mut v = Vec::<std::thread::JoinHandle<()>>::new();
 
     for mk in MAPPINGS_KINDS {
         let file_url = format!("{}/{}", mappings_url.clone(), mk);
-        let save_path = store_dir.as_ref().join("mappings").join(mc_version).join(channel).join(mappings_version).join(mk);
+        let save_path = store_dir
+            .as_ref()
+            .join("mappings")
+            .join(mc_version)
+            .join(channel)
+            .join(mappings_version)
+            .join(mk);
         std::fs::create_dir_all(save_path.parent().unwrap()).unwrap();
 
         v.push(std::thread::spawn(move || {
-            match download_file(
-                save_path.as_path(),
-                &file_url,
-            ) {
-                Ok(_) => { println!("{mk} downloaded"); }
-                Err(err) => { println!("error while downloading {mk}: {err}"); }
+            match download_file(save_path.as_path(), &file_url) {
+                Ok(_) => {
+                    println!("{mk} downloaded");
+                }
+                Err(err) => {
+                    println!("error while downloading {mk}: {err}");
+                }
             };
         }));
     }

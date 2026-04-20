@@ -1,19 +1,13 @@
 #![warn(clippy::all, rust_2018_idioms)]
 #![cfg_attr(
-    all(
-        not(debug_assertions),
-        feature = "gui"
-    ),
+    all(not(debug_assertions), feature = "gui"),
     windows_subsystem = "windows"
 )]
 
-use std::fs::{read_to_string, File};
-use std::io;
-use std::io::{BufRead, BufReader};
 #[cfg(feature = "cli")]
 use clap::Parser;
+#[allow(unused)]
 use colored::Colorize;
-use utils::cache;
 
 fn main() {
     #[cfg(feature = "cli")]
@@ -22,9 +16,11 @@ fn main() {
 
         if args.show_versions || args.input.is_empty() {
             if args.input.is_empty() {
-                println!("\
+                println!(
+                    "\
                 No input files / directories specified, just showing available mappings!\n\
-                To get help about usage run with '--help' flag")
+                To get help about usage run with '--help' flag"
+                )
             }
             let versions = utils::cache::read_versions_json();
 
@@ -64,11 +60,12 @@ fn main() {
                     println!("{} {}", prefix, map_type_text);
 
                     for (i, map_version) in map_versions.iter().enumerate() {
-                        let map_version_text = if utils::cache::mappings_exists(game_version, map_type, map_version) {
-                            map_version.green()
-                        } else {
-                            map_version.red()
-                        };
+                        let map_version_text =
+                            if utils::cache::mappings_exists(game_version, map_type, map_version) {
+                                map_version.green()
+                            } else {
+                                map_version.red()
+                            };
 
                         let repr_prefix = if i == (map_versions.len() - 1) {
                             "└──"
@@ -93,9 +90,11 @@ fn main() {
 
         if args.input.len() > 0 {
             let mut input_files: Vec<String> = vec![];
-            if !cache::mappings_exists(args.game_version.as_str(),
-                                       args.mappings_channel.as_str(),
-                                       args.mappings_version.as_str()) {
+            if !utils::cache::mappings_exists(
+                args.game_version.as_str(),
+                args.mappings_channel.as_str(),
+                args.mappings_version.as_str(),
+            ) {
                 reborn::remapper::prepare_mappings(&args);
             }
             reborn::remapper::gather_input_files(&mut input_files, &args.input);
@@ -108,5 +107,4 @@ fn main() {
     {
         gui::app::App::run().expect("Unable to run GUI app");
     }
-    tsrg_trie::tsrg_parser::read_tsrg("./joined.tsrg");
 }

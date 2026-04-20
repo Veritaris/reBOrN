@@ -1,5 +1,5 @@
-use std::ops::{Add, AddAssign, Mul, Sub, SubAssign};
 use egui::Color32;
+use std::ops::{Add, AddAssign, Mul, Sub, SubAssign};
 
 pub struct Color {
     pub r: u8,
