@@ -39,4 +39,6 @@ opt-level = 0
 [patch.crates-io]
 
 [features]
+cli = []
+jni = []
 gui = []
