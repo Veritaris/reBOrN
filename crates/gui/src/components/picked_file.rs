@@ -9,15 +9,17 @@ pub fn picked_files<Consumer>(
 where
     Consumer: FnMut(&std::path::PathBuf, usize),
 {
-    let desired_size = ui.spacing().interact_size.y * egui::vec2(1.0, 1.0);
-    let (rect, response) = ui.allocate_exact_size(desired_size, egui::Sense::click());
+    let (rect, response) = ui.allocate_exact_size(egui::Vec2::ZERO, egui::Sense::click());
     let file_idx = file_idx.unwrap_or(0);
+    let max_chip_width = ui.available_width().max(80.0);
     egui::Frame::NONE
         .fill(Color32::TRANSPARENT)
-        .inner_margin(egui::Margin::symmetric(10, 3))
-        .corner_radius(egui::CornerRadius::same(15))
+        .inner_margin(egui::Margin::symmetric(6, 0))
+        .corner_radius(egui::CornerRadius::same(10))
         .stroke(egui::Stroke::new(0.8, Color32::WHITE))
         .show(ui, |ui| {
+            ui.set_max_width(max_chip_width);
+            ui.spacing_mut().item_spacing.x = 4.0;
             ui.horizontal(|ui| {
                 let file = files.get(file_idx);
                 if let Some(file) = file
@@ -25,7 +27,7 @@ where
                 {
                     let filename = format!("{}", file.file_name().unwrap_or_default().display());
                     let filename_text = egui::RichText::new(filename).color(Color32::WHITE);
-                    ui.add(egui::Label::new(filename_text));
+                    ui.add(egui::Label::new(filename_text).truncate());
                     let close_response = ui
                         .add(
                             egui::Button::new(egui::RichText::new("❌"))
