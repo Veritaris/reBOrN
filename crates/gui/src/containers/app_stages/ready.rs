@@ -52,32 +52,47 @@ pub fn app_ready(ui: &mut Ui, ctx: &egui::Context, app: &mut App) {
         app.extra_mappings_values.push("".to_string());
     }
 
-    components::file_select::file_select("deobfuscation.select_file", false, &JAR_SELECT_FILTERS, ui, |files| {
-        app.picked_files = Some(files)
+    let mut run_clicked = false;
+    ui.horizontal(|ui| {
+        components::file_select::file_select(
+            "deobfuscation.select_file",
+            false,
+            &JAR_SELECT_FILTERS,
+            ui,
+            |files| app.picked_files = Some(files),
+        );
+        run_clicked = ui
+            .add_enabled(
+                !is_empty_or_none(&app.picked_files),
+                egui::Button::new("deobfuscation.run"),
+            )
+            .on_disabled_hover_text("No files selected")
+            .clicked();
     });
 
     if let Some(files) = &mut app.picked_files {
-        ui.horizontal(|ui| {
-            let mut index_to_remove: Vec<usize> = vec![];
-            for i in 0..files.len() {
-                components::picked_files(ui, files.as_slice(), Some(i), |_, fid| {
-                    index_to_remove.push(fid);
-                });
-            }
-            index_to_remove.sort_by(|a, b| b.cmp(a));
-            for fid in index_to_remove {
-                files.remove(fid);
-            }
-        });
+        egui::ScrollArea::vertical()
+            .id_salt("picked_files_scroll")
+            .auto_shrink([false, true])
+            .max_height(200.0)
+            .show(ui, |ui| {
+                ui.spacing_mut().item_spacing = egui::vec2(2.0, 2.0);
+                let mut index_to_remove: Vec<usize> = vec![];
+                for i in 0..files.len() {
+                    ui.vertical(|ui| {
+                        components::picked_files(ui, files.as_slice(), Some(i), |_, fid| {
+                            index_to_remove.push(fid);
+                        });
+                    });
+                }
+                index_to_remove.sort_by(|a, b| b.cmp(a));
+                for fid in index_to_remove {
+                    files.remove(fid);
+                }
+            });
     }
 
-    if ui
-        .add_enabled(
-            !is_empty_or_none(&app.picked_files),
-            egui::Button::new("deobfuscation.run"),
-        )
-        .on_disabled_hover_text("No files selected")
-        .clicked()
+    if run_clicked
         && let Some(files) = &app.picked_files
     {
         println!("Deobfuscating {:?}", files);

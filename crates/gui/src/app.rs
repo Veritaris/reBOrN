@@ -265,7 +265,7 @@ impl eframe::App for App {
             {
                 app_stages::debug_stages::debug_stages(ui, self);
             }
-            egui::ScrollArea::vertical().show(ui, |ui| {
+            egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
                 ui.horizontal(|ui| {
                     ui.label(egui::RichText::new(localize("options.autoupdate_versions")))
                         .on_hover_text(localize("options.autoupdate_versions.tooltip"));
