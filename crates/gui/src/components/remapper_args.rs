@@ -2,7 +2,6 @@ use crate::app::App;
 use crate::components;
 use crate::localisation::localize;
 use mc_deobf::mappings::ModLoader;
-use std::sync::LockResult;
 
 pub fn remapper_args_block(ui: &mut egui::Ui, app: &mut App) {
     egui::CollapsingHeader::new(localize("deobfuscation.remapper_args"))

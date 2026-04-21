@@ -1,9 +1,9 @@
 use crate::components;
 use crate::containers::app_stages;
 use crate::localisation::localize;
-use eframe::Frame;
 use eframe::emath::Align;
 use eframe::epaint::Rgba;
+use eframe::Frame;
 use egui::Ui;
 use egui_notify::{Anchor, Toasts};
 use linked_hash_map::LinkedHashMap;
@@ -11,7 +11,7 @@ use mc_deobf::args::RebornCliArgs;
 pub(crate) use mc_deobf::mappings::{DeobfMappingsType, ModLoader};
 use std::collections::HashMap;
 use std::sync::mpsc::{Receiver, Sender};
-use std::sync::{Arc, Mutex, mpsc};
+use std::sync::{mpsc, Arc, Mutex};
 use std::time::Duration;
 use utils::cache::RebornCache;
 
