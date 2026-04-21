@@ -23,10 +23,6 @@ identifier = "me.veritaris.jarremapper"
 icon = ["resources/icon.ico"]
 
 [dependencies]
-# Workspace dependencies first
-zip = { workspace = true }
-indoc = { workspace = true }
-
 clap = { version = "4.5.53", features = ["derive"] }
 colored = { version = "3.0.0" }
 

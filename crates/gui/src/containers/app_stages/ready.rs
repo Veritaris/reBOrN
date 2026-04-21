@@ -5,8 +5,6 @@ use crate::utils::is_empty_or_none;
 use egui::Ui;
 use mc_deobf::args::RebornCliArgs;
 use mc_deobf::mappings::DeobfMappingsType;
-use std::path::PathBuf;
-use std::sync::LockResult;
 use std::time::Duration;
 
 const JAR_SELECT_FILTERS: [components::file_select::SelectFileFilter; 2] = [
@@ -20,7 +18,7 @@ const JAR_SELECT_FILTERS: [components::file_select::SelectFileFilter; 2] = [
     },
 ];
 
-pub fn app_ready(ui: &mut Ui, ctx: &egui::Context, app: &mut App) {
+pub fn app_ready(ui: &mut Ui, app: &mut App) {
     ui.label(egui::RichText::new(localize("deobfuscation.input_files")));
 
     ui.horizontal(|ui| {
