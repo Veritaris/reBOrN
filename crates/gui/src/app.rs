@@ -3,13 +3,15 @@ use crate::containers::app_stages;
 use crate::localisation::localize;
 use eframe::emath::Align;
 use eframe::epaint::Rgba;
+use eframe::Frame;
+use egui::Ui;
 use egui_notify::{Anchor, Toasts};
 use linked_hash_map::LinkedHashMap;
 use mc_deobf::args::RebornCliArgs;
 pub(crate) use mc_deobf::mappings::{DeobfMappingsType, ModLoader};
 use std::collections::HashMap;
 use std::sync::mpsc::{Receiver, Sender};
-use std::sync::{Arc, Mutex, mpsc};
+use std::sync::{mpsc, Arc, Mutex};
 use std::time::Duration;
 use utils::cache::RebornCache;
 
@@ -259,8 +261,8 @@ impl App {
 }
 
 impl eframe::App for App {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        window_frame(ctx, "reBOrN", |ui| {
+    fn ui(&mut self, ui: &mut Ui, frame: &mut Frame) {
+        window_frame(ui, "reBOrN", |ui| {
             #[cfg(debug_assertions)]
             {
                 app_stages::debug_stages::debug_stages(ui, self);
@@ -278,12 +280,12 @@ impl eframe::App for App {
                     AppState::ValidatingCache => app_stages::validating_cache::app_validating_cache(ui),
                     AppState::DownloadingMappings => {}
                     AppState::Deobfuscating => {}
-                    AppState::Ready => app_stages::ready::app_ready(ui, ctx, self),
+                    AppState::Ready => app_stages::ready::app_ready(ui, self),
                 }
                 self.toasts
                     .lock()
                     .map(|mut toasts| {
-                        toasts.show(ctx);
+                        toasts.show(ui);
                     })
                     .expect("Unable to show toasts");
             });
@@ -299,16 +301,16 @@ impl eframe::App for App {
     }
 }
 
-fn window_frame(ctx: &egui::Context, title: &str, add_contents: impl FnOnce(&mut egui::Ui)) {
+fn window_frame(ui: &mut Ui, title: &str, add_contents: impl FnOnce(&mut egui::Ui)) {
     let panel_frame = egui::Frame {
-        fill: ctx.style().visuals.window_fill(),
+        fill: ui.style().visuals.window_fill(),
         corner_radius: 10.0.into(),
-        stroke: ctx.style().visuals.widgets.noninteractive.fg_stroke,
+        stroke: ui.style().visuals.widgets.noninteractive.fg_stroke,
         outer_margin: 0.5.into(),
         ..Default::default()
     };
 
-    egui::CentralPanel::default().frame(panel_frame).show(ctx, |ui| {
+    egui::CentralPanel::default().frame(panel_frame).show_inside(ui, |ui| {
         let app_rect = ui.max_rect();
 
         let title_bar_height = 32.0;

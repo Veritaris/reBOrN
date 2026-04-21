@@ -1,4 +1,4 @@
-use crate::colors::{Color, HexColor};
+use crate::colors::Color;
 use crate::ui_consts::{END_COLOR, START_COLOR};
 use eframe::epaint::{Color32, StrokeKind};
 

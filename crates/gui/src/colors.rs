@@ -18,6 +18,7 @@ impl<'a> From<HexColor<'a>> for Color {
     }
 }
 
+
 impl Into<Color32> for Color {
     fn into(self) -> Color32 {
         Color32::from_rgba_premultiplied(self.r, self.g, self.b, self.a)

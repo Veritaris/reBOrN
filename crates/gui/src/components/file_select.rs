@@ -1,4 +1,3 @@
-use crate::components;
 use crate::localisation::localize;
 use egui::Ui;
 
@@ -26,10 +25,7 @@ pub fn file_select<Consumer>(
         }
 
         let files = if select_many {
-            match files_dialog.pick_file() {
-                None => None,
-                Some(res) => Some(vec![res]),
-            }
+            files_dialog.pick_file().map(|res| vec![res])
         } else {
             files_dialog.pick_files()
         };

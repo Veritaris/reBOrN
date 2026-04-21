@@ -118,7 +118,7 @@ const CSV_SELECTION_FILTER: &[SelectFileFilter; 1] = &[SelectFileFilter {
     name: "csv",
     extensions: &["csv"],
 }];
-fn mapping_file_selector(ui: &mut egui::Ui, label: &str, file: &Option<std::path::PathBuf>) -> FileSelectorAction {
+fn mapping_file_selector(ui: &mut Ui, label: &str, file: &Option<std::path::PathBuf>) -> FileSelectorAction {
     let mut action = FileSelectorAction::None;
     ui.horizontal(|ui| {
         components::file_select::file_select(label, false, CSV_SELECTION_FILTER, ui, |files| {
@@ -181,11 +181,7 @@ pub fn remap_target_select(ui: &mut Ui, app: &mut App) {
                     DeobfMappingsType::VersionsJSON,
                     "Versions JSON",
                 );
-                ui.selectable_value(
-                    &mut app.deobf_target_select_state,
-                    DeobfMappingsType::Custom,
-                    "Custom",
-                );
+                ui.selectable_value(&mut app.deobf_target_select_state, DeobfMappingsType::Custom, "Custom");
             });
             ui.separator();
 
